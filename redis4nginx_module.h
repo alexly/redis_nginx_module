@@ -9,22 +9,20 @@
 #include <ngx_core.h>
 #include <ngx_http.h>
 
-// context struct in the request handling cycle, holding
-// the current states of the command evaluator
-typedef struct redis4nginx_ctx_t {
-    redisAsyncContext *async;
-    ngx_connection_t *conn;
-    unsigned connected:1;
-} redis4nginx_ctx_t;
+extern ngx_module_t redis4nginx_module;
 
 typedef struct {
     /* elements of the following arrays are of type
      * ngx_http_echo_cmd_t */
-
-    ngx_str_t *lua_script;
+    ngx_array_t     *handler_cmds;
 } redis4nginx_loc_conf_t;
 
-redis4nginx_ctx_t *redis4nginx_create_ctx(ngx_http_request_t *r);
-int redis4nginx_command(redis4nginx_ctx_t *ctx, redisCallbackFn *fn, void *privdata, const char *format, ...);
+// Connect to redis db
+ngx_int_t redis4nginx_init_connection();
+int redis4nginx_command(redisCallbackFn *fn, void *privdata, const char *format, ...);
+
+// Send json response and finalize request
+void redis4nginx_send_json(redisAsyncContext *c, void *repl, void *privdata);
+void redis4nginx_get(ngx_http_request_t *r);
 
 #endif

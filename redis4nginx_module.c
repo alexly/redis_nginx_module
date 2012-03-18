@@ -7,20 +7,19 @@
 char *redis4nginx_entry_point(ngx_conf_t *cf, ngx_command_t *cmd, void *conf);
 void eval_callback(redisAsyncContext *c, void *repl, void *privdata);
 void * redis4nginx_create_conf(ngx_conf_t *cf);
+ngx_int_t redis4nginx_handler(ngx_http_request_t *r);
 
 static ngx_command_t  redis4nginx_commands[] = {
 
   { ngx_string("eval"),
-    NGX_HTTP_LOC_CONF|NGX_CONF_TAKE1,
+    NGX_HTTP_LOC_CONF|NGX_CONF_ANY,
     redis4nginx_entry_point,
-    0,
-    0,
+    NGX_HTTP_LOC_CONF_OFFSET,
+    offsetof(redis4nginx_loc_conf_t, handler_cmds),
     NULL },
 
     ngx_null_command
 };
-
-//static u_char ngx_hello_string[] = "Hello, world!";
 
 static ngx_http_module_t  redis4nginx_module_ctx = {
   NULL,                          /* preconfiguration */
@@ -52,19 +51,16 @@ ngx_module_t redis4nginx_module = {
   NGX_MODULE_V1_PADDING
 };
 
-static ngx_int_t redis4nginx_handler(ngx_http_request_t *r)
-{  
-    redis4nginx_ctx_t *ctx;
+ngx_int_t redis4nginx_handler(ngx_http_request_t *r)
+{     
+    redis4nginx_loc_conf_t *elcf;
     
-    ctx = ngx_http_get_module_ctx(r, redis4nginx_module);
-    if (ctx == NULL) {
-        ctx = redis4nginx_create_ctx(r);
-        if (ctx == NULL) {
-            return NGX_HTTP_INTERNAL_SERVER_ERROR;
-        }
+    redis4nginx_init_connection();
+            
+    elcf = ngx_http_get_module_loc_conf(r, redis4nginx_module);
+    if(elcf == NULL)
+        return NGX_DECLINED;
 
-        ngx_http_set_ctx(r, ctx, redis4nginx_module);
-    }
     
     // we response to 'GET' and 'HEAD' requests only 
     if (!(r->method & NGX_HTTP_GET)) {
@@ -72,25 +68,33 @@ static ngx_int_t redis4nginx_handler(ngx_http_request_t *r)
     }
     
     //ngx_redis_command(ctx, NULL, (char*)"end-1", "SET key test");
-    redis4nginx_command(ctx, eval_callback, r, "get key");
 
-    r->main->count++;
+    redis4nginx_get(r);
     
     return NGX_AGAIN;
 }
 
-void eval_callback(redisAsyncContext *c, void *repl, void *privdata)
+static u_char json_content_type[] = "application/json";
+
+void redis4nginx_get(ngx_http_request_t *r)
 {
-    ngx_int_t    rc;
-    ngx_buf_t   *b;
-    ngx_chain_t  out;
+    redis4nginx_command(redis4nginx_send_json, r, "get key");
+    r->main->count++;
+}
+
+void redis4nginx_send_json(redisAsyncContext *c, void *repl, void *privdata)
+{
     redisReply *reply = repl;
     ngx_http_request_t *r = privdata;
     
+    ngx_int_t    rc;
+    ngx_buf_t   *b;
+    ngx_chain_t  out;
+    
     // set the 'Content-type' header
-    r->headers_out.content_type_len = sizeof("text/html") - 1;
-    r->headers_out.content_type.len = sizeof("text/html") - 1;
-    ngx_str_set(&r->headers_out.content_type, "text/html");
+    r->headers_out.content_type_len = sizeof(json_content_type) - 1;
+    r->headers_out.content_type.len = sizeof(json_content_type) - 1;
+    ngx_str_set(&r->headers_out.content_type, json_content_type);
  
     // allocate a buffer for your response body
     b = ngx_pcalloc(r->pool, sizeof(ngx_buf_t));
@@ -105,13 +109,13 @@ void eval_callback(redisAsyncContext *c, void *repl, void *privdata)
  
     // adjust the pointers of the buffer
     b->pos = (u_char*)reply->str;
-    b->last = (u_char*)reply->str + sizeof(reply->str) - 1;
+    b->last = (u_char*)reply->str + reply->len;
     b->memory = 1;    // this buffer is in memory
     b->last_buf = 1;  // this is the last buffer in the buffer chain
  
     // set the status line
     r->headers_out.status = NGX_HTTP_OK;
-    r->headers_out.content_length_n = sizeof(reply->str) - 1;
+    r->headers_out.content_length_n = reply->len;
  
     // send the headers of your response
     rc = ngx_http_send_header(r);
@@ -135,24 +139,11 @@ void eval_callback(redisAsyncContext *c, void *repl, void *privdata)
 void * redis4nginx_create_conf(ngx_conf_t *cf)
 {
     redis4nginx_loc_conf_t        *conf;
-
-    ngx_str_t *str =  cf->args->elts;
-    ngx_str_t script =  str[0];
     
     conf = ngx_pcalloc(cf->pool, sizeof(redis4nginx_loc_conf_t));
     if (conf == NULL) {
         return NGX_CONF_ERROR;
     }
-    
-    conf->lua_script = &script;
-    
-    /* set by ngx_pcalloc
-     *  conf->handler_cmds = NULL
-     *  conf->before_body_cmds = NULL
-     *  conf->after_body_cmds = NULL
-     *  conf->seen_leading_output = 0
-     *  conf->seen_trailing_output = 0
-     */
 
     return conf;
 }
