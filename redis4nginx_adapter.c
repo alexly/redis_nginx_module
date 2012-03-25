@@ -1,4 +1,13 @@
-#include "redis4nginx_module.h"
+#ifndef DDEBUG
+#define DDEBUG 0
+#endif
+
+#include <ngx_config.h>
+#include <ngx_core.h>
+#include <ngx_http.h>
+
+#include "hiredis/async.h"
+#include "ddebug.h"
 
 // context struct in the request handling cycle, holding
 // the current states of the command evaluator

@@ -2,7 +2,6 @@
 #define __NGX_REDIS_MODULE__
 
 // hiredis headers
-#include "hiredis/hiredis.h"
 #include "hiredis/async.h"
 
 #include <ngx_config.h>
