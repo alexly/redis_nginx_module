@@ -7,11 +7,8 @@
 
 static u_char json_content_type[] = "application/json";
 
-void redis4nginx_send_json(redisAsyncContext *c, void *repl, void *privdata)
-{
-    redisReply *reply = repl;
-    ngx_http_request_t *r = privdata;
-    
+void redis4nginx_send_json(ngx_http_request_t *r, redisAsyncContext *c, redisReply *reply)
+{   
     ngx_int_t    rc;
     ngx_buf_t   *b;
     ngx_chain_t  out;

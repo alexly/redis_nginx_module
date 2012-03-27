@@ -23,6 +23,58 @@ static ngx_int_t redis4nginx_add_event(ngx_connection_t *c, ngx_int_t event);
 static ngx_int_t redis4nginx_del_event(ngx_connection_t *c, ngx_int_t event);
 static ngx_int_t redis4nginx_add_connection(int fd, ngx_connection_t **c);
 
+ngx_int_t redis4nginx_init_connection(ngx_str_t* host, ngx_int_t port)
+{     
+    redis4nginx_connection_t *ctx;
+        
+    if(redis4nginx_connection == NULL) {
+        ctx = malloc(sizeof(redis4nginx_connection_t));
+        
+        if(port >=0) {
+            ctx->async = redisAsyncConnect((const char*)host->data, port);
+        }
+        else {
+            ctx->async = redisAsyncConnectUnix((const char*)host->data);
+        }
+        
+        //
+        
+        redisAsyncSetConnectCallback(ctx->async, redis4nginx_connected_handler);
+        redisAsyncSetDisconnectCallback(ctx->async, redis4nginx_disconnected_handler);
+
+        if(redis4nginx_add_connection(ctx->async->c.fd, &ctx->conn) != NGX_OK) {
+            return NGX_ERROR;
+        }
+
+        ctx->conn->read->handler = redis4nginx_read_event_handler;
+        ctx->conn->write->handler = redis4nginx_write_event_handler;
+
+        ctx->async->data = ctx;
+        ctx->conn->data = ctx;
+        
+        // Register functions to start/stop listening for events
+        ctx->async->ev.addRead = ngx_redis_add_read;
+        ctx->async->ev.delRead = ngx_redis_del_read;
+        ctx->async->ev.addWrite = ngx_redis_add_write;
+        ctx->async->ev.delWrite = ngx_redis_del_write;
+        ctx->async->ev.data = ctx;
+        //redis4nginx_single->async->ev.cleanup = ngx_redis_cleanup;
+        
+        redis4nginx_connection = ctx;
+    }
+    
+    return NGX_OK;
+}
+
+int redis4nginx_async_command(redisCallbackFn *fn, void *privdata, const char *format, ...) {
+    va_list ap;
+    int status;
+    va_start(ap,format);
+    status = redisvAsyncCommand(redis4nginx_connection->async,fn,privdata,format,ap);
+    va_end(ap);
+    return status;
+}
+
 void ngx_redis_add_read(void *privdata)
 {
     redis4nginx_connection_t *ctx = (redis4nginx_connection_t*)privdata;
@@ -71,50 +123,6 @@ void redis4nginx_disconnected_handler(const redisAsyncContext *ctx, int status)
 {
     redis4nginx_connection_t *context  = ctx->data;
     context->connected = 0;
-}
-
-ngx_int_t redis4nginx_init_connection(ngx_http_request_t *r)
-{     
-    redis4nginx_connection_t *ctx;
-        
-    if(redis4nginx_connection == NULL) {
-        ctx = malloc(sizeof(redis4nginx_connection_t));
-        
-        ctx->async = redisAsyncConnect("127.0.0.1", 6379);
-        redisAsyncSetConnectCallback(ctx->async, redis4nginx_connected_handler);
-        redisAsyncSetDisconnectCallback(ctx->async, redis4nginx_disconnected_handler);
-
-        if(redis4nginx_add_connection(ctx->async->c.fd, &ctx->conn) != NGX_OK) {
-            return NGX_ERROR;
-        }
-
-        ctx->conn->read->handler = redis4nginx_read_event_handler;
-        ctx->conn->write->handler = redis4nginx_write_event_handler;
-
-        ctx->async->data = ctx;
-        ctx->conn->data = ctx;
-        
-        // Register functions to start/stop listening for events
-        ctx->async->ev.addRead = ngx_redis_add_read;
-        ctx->async->ev.delRead = ngx_redis_del_read;
-        ctx->async->ev.addWrite = ngx_redis_add_write;
-        ctx->async->ev.delWrite = ngx_redis_del_write;
-        ctx->async->ev.data = ctx;
-        //redis4nginx_single->async->ev.cleanup = ngx_redis_cleanup;
-        
-        redis4nginx_connection = ctx;
-    }
-    
-    return NGX_OK;
-}
-
-int redis4nginx_command(redisCallbackFn *fn, void *privdata, const char *format, ...) {
-    va_list ap;
-    int status;
-    va_start(ap,format);
-    status = redisvAsyncCommand(redis4nginx_connection->async,fn,privdata,format,ap);
-    va_end(ap);
-    return status;
 }
 
 static ngx_int_t redis4nginx_add_event(ngx_connection_t *c, ngx_int_t event) {

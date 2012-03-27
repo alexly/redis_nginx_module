@@ -11,17 +11,22 @@
 extern ngx_module_t redis4nginx_module;
 
 typedef struct {
-    /* elements of the following arrays are of type
-     * ngx_http_echo_cmd_t */
-    ngx_array_t     *handler_cmds;
+	ngx_str_t host;
+	ngx_int_t port;
+
+} redis4nginx_srv_conf_t;
+
+typedef struct {
+	ngx_array_t *query_lengths;
+	ngx_array_t *query_values;
 } redis4nginx_loc_conf_t;
 
-// Connect to redis db
-ngx_int_t redis4nginx_init_connection();
-int redis4nginx_command(redisCallbackFn *fn, void *privdata, const char *format, ...);
+// EVAL
+ngx_int_t redis4nginx_eval_handler(ngx_http_request_t *r);
+void redis4nginx_eval_callback(redisAsyncContext *c, void *repl, void *privdata);
+char *redis4nginx_eval_handler_init(ngx_conf_t *cf, ngx_command_t *cmd, void *conf);
 
 // Send json response and finalize request
-void redis4nginx_send_json(redisAsyncContext *c, void *repl, void *privdata);
-void redis4nginx_get(ngx_http_request_t *r);
+void redis4nginx_send_json(ngx_http_request_t *r, redisAsyncContext *c, redisReply *reply);
 
 #endif

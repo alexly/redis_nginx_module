@@ -7,6 +7,7 @@ NGX_ADDON_SRCS="$NGX_ADDON_SRCS $ngx_addon_dir/redis4nginx_adapter.c
                 $ngx_addon_dir/hiredis/async.c  
                 $ngx_addon_dir/redis4nginx_module.c 
                 $ngx_addon_dir/redis4nginx_utils.c 
+                $ngx_addon_dir/redis4nginx_eval.c 
                 "
 
 NGX_ADDON_DEPS="$NGX_ADDON_DEPS $ngx_addon_dir/redis4nginx_module.h"
