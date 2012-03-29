@@ -17,8 +17,7 @@ typedef struct {
 } redis4nginx_srv_conf_t;
 
 typedef struct {
-	ngx_array_t *query_lengths;
-	ngx_array_t *query_values;
+    ngx_array_t *queries; /* for redis2_query */
 } redis4nginx_loc_conf_t;
 
 // EVAL

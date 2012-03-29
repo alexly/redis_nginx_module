@@ -99,16 +99,16 @@ static void* redis4nginx_create_loc_conf(ngx_conf_t *cf)
 
 static char* redis4nginx_merge_loc_conf(ngx_conf_t *cf, void *parent, void *child)
 {
-	redis4nginx_loc_conf_t *prev = parent;
-	redis4nginx_loc_conf_t *conf = child;
+	//redis4nginx_loc_conf_t *prev = parent;
+	//redis4nginx_loc_conf_t *conf = child;
 
-	ngx_log_debug0(NGX_LOG_INFO, cf->log, 0, "redis4nginx merge loc");
+	//ngx_log_debug0(NGX_LOG_INFO, cf->log, 0, "redis4nginx merge loc");
 
-	if (conf->query_lengths == NULL)
-		conf->query_lengths = prev->query_lengths;
+	//if (conf->query_lengths == NULL)
+		//conf->query_lengths = prev->query_lengths;
 
-	if (conf->query_values == NULL)
-		conf->query_values = prev->query_values;
+	//if (conf->query_values == NULL)
+		//conf->query_values = prev->query_values;
 
 
 	return NGX_CONF_OK;

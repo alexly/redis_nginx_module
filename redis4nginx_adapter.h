@@ -9,5 +9,6 @@ ngx_int_t redis4nginx_init_connection(ngx_str_t* host, ngx_int_t port);
 
 // Execute redis command
 int redis4nginx_async_command(redisCallbackFn *fn, void *privdata, const char *format, ...);
+int redis4nginx_async_command_argv(redisCallbackFn *fn, void *privdata, int argc, const char **argv, const size_t *argvlen);
 
 #endif
