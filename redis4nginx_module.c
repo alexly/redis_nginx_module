@@ -12,22 +12,29 @@ static char* redis4nginx_merge_loc_conf(ngx_conf_t *cf, void *parent, void *chil
 
 static ngx_command_t  redis4nginx_commands[] = {
     {	ngx_string("redis_host"),
-		NGX_HTTP_SRV_CONF|NGX_HTTP_MAIN_CONF|NGX_CONF_TAKE1,
-		ngx_conf_set_str_slot,
-		NGX_HTTP_SRV_CONF_OFFSET,
-		offsetof(redis4nginx_srv_conf_t, host),
-		NULL },
-    
-	{	ngx_string("redis_port"),
-		NGX_HTTP_SRV_CONF|NGX_HTTP_MAIN_CONF|NGX_CONF_TAKE1,
-		ngx_conf_set_num_slot,
-		NGX_HTTP_SRV_CONF_OFFSET,
-		offsetof(redis4nginx_srv_conf_t, port),
-		NULL },
-        
-    {   ngx_string("eval"),
+        NGX_HTTP_SRV_CONF|NGX_HTTP_MAIN_CONF|NGX_CONF_TAKE1,
+        ngx_conf_set_str_slot,
+        NGX_HTTP_SRV_CONF_OFFSET,
+        offsetof(redis4nginx_srv_conf_t, host),
+        NULL },
+
+    {	ngx_string("redis_port"),
+        NGX_HTTP_SRV_CONF|NGX_HTTP_MAIN_CONF|NGX_CONF_TAKE1,
+        ngx_conf_set_num_slot,
+        NGX_HTTP_SRV_CONF_OFFSET,
+        offsetof(redis4nginx_srv_conf_t, port),
+        NULL },
+
+    {   ngx_string("redis_eval"),
         NGX_HTTP_LOC_CONF|NGX_CONF_ANY,
         redis4nginx_eval_handler_init,
+        NGX_HTTP_LOC_CONF_OFFSET,
+        0,
+        NULL },
+        
+    {   ngx_string("redis_command"),
+        NGX_HTTP_LOC_CONF|NGX_CONF_ANY,
+        redis4nginx_command_handler_init,
         NGX_HTTP_LOC_CONF_OFFSET,
         0,
         NULL },

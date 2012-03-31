@@ -17,15 +17,20 @@ typedef struct {
 } redis4nginx_srv_conf_t;
 
 typedef struct {
-    ngx_array_t *queries; /* for redis2_query */
+    ngx_array_t cmd_arguments; // arguments for redis_command/redis_eval
+    ngx_str_t script; // lua script, only for redis_eval
+    char hashed_script[40]; // SHA1 hash for lua script
 } redis4nginx_loc_conf_t;
 
 // EVAL
-ngx_int_t redis4nginx_eval_handler(ngx_http_request_t *r);
-void redis4nginx_eval_callback(redisAsyncContext *c, void *repl, void *privdata);
 char *redis4nginx_eval_handler_init(ngx_conf_t *cf, ngx_command_t *cmd, void *conf);
 
+//Other redis commands
+char *redis4nginx_command_handler_init(ngx_conf_t *cf, ngx_command_t *cmd, void *conf);
+
 // Send json response and finalize request
-void redis4nginx_send_json(ngx_http_request_t *r, redisAsyncContext *c, redisReply *reply);
+void redis4nginx_send_redis_reply(ngx_http_request_t *r, redisAsyncContext *c, redisReply *reply);
+
+char * compile_complex_values(ngx_conf_t *cf, ngx_array_t *output, ngx_uint_t start_compiled_arg, ngx_uint_t num_compiled_arg);
 
 #endif

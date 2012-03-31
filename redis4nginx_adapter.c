@@ -21,8 +21,8 @@ static redis4nginx_connection_t* redis4nginx_connection = NULL;
 static ngx_int_t redis4nginx_add_event(ngx_connection_t *c, ngx_int_t event);
 static ngx_int_t redis4nginx_del_event(ngx_connection_t *c, ngx_int_t event);
 static ngx_int_t redis4nginx_add_connection(int fd, ngx_connection_t **c);
-static void redis4nginx_connected_handler(const redisAsyncContext *ctx);
-static void redis4nginx_disconnected_handler(const redisAsyncContext *ctx, int status);
+static void redis4nginx_connecte_event_handler(const redisAsyncContext *ctx);
+static void redis4nginx_disconnect_event_handler(const redisAsyncContext *ctx, int status);
 static void ngx_redis_add_read(void *privdata);
 static void ngx_redis_del_read(void *privdata);
 static void ngx_redis_add_write(void *privdata);
@@ -48,8 +48,8 @@ ngx_int_t redis4nginx_init_connection(ngx_str_t* host, ngx_int_t port)
             return NGX_ERROR;
         }
         
-        redisAsyncSetConnectCallback(ctx->async, redis4nginx_connected_handler);
-        redisAsyncSetDisconnectCallback(ctx->async, redis4nginx_disconnected_handler);
+        redisAsyncSetConnectCallback(ctx->async, redis4nginx_connecte_event_handler);
+        redisAsyncSetDisconnectCallback(ctx->async, redis4nginx_disconnect_event_handler);
 
         if(redis4nginx_add_connection(ctx->async->c.fd, &ctx->conn) != NGX_OK) {
             return NGX_ERROR;
@@ -127,13 +127,13 @@ static void redis4nginx_write_event_handler(ngx_event_t *handle)
     redisAsyncHandleWrite(context->async);
 }
 
-static void redis4nginx_connected_handler(const redisAsyncContext *ctx)
+static void redis4nginx_connecte_event_handler(const redisAsyncContext *ctx)
 {
     redis4nginx_connection_t *context  = ctx->data;
     context->connected = 1;
 }
 
-static void redis4nginx_disconnected_handler(const redisAsyncContext *ctx, int status)
+static void redis4nginx_disconnect_event_handler(const redisAsyncContext *ctx, int status)
 {
     redis4nginx_connection_t *context  = ctx->data;
     context->connected = 0;
