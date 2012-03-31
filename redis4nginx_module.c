@@ -5,6 +5,7 @@
 #include "ddebug.h"
 #include "redis4nginx_module.h"
 
+static ngx_int_t redis4nginx_init_module(ngx_cycle_t *cycle);
 static void* redis4nginx_create_srv_conf(ngx_conf_t *cf);
 static char* redis4nginx_merge_srv_conf(ngx_conf_t *cf, void *parent, void *child);
 static void* redis4nginx_create_loc_conf(ngx_conf_t *cf);
@@ -63,7 +64,7 @@ ngx_module_t redis4nginx_module = {
   redis4nginx_commands,   /* module directives */
   NGX_HTTP_MODULE,               /* module type */
   NULL,                          /* init master */
-  NULL,                          /* init module */
+  redis4nginx_init_module,       /* init module */
   NULL,                          /* init process */
   NULL,                          /* init thread */
   NULL,                          /* exit thread */
@@ -72,13 +73,18 @@ ngx_module_t redis4nginx_module = {
   NGX_MODULE_V1_PADDING
 };
 
+static ngx_int_t redis4nginx_init_module(ngx_cycle_t *cycle)
+{    
+    return NGX_OK;
+}
+
 static void* redis4nginx_create_srv_conf(ngx_conf_t *cf)
 {
-	redis4nginx_srv_conf_t *conf = ngx_pcalloc(cf->pool, sizeof(redis4nginx_srv_conf_t));
+    redis4nginx_srv_conf_t *conf = ngx_pcalloc(cf->pool, sizeof(redis4nginx_srv_conf_t));
 
-	conf->port = NGX_CONF_UNSET;
+    conf->port = NGX_CONF_UNSET;
 
-	return conf;
+    return conf;
 }
 
 static char* redis4nginx_merge_srv_conf(ngx_conf_t *cf, void *parent, void *child)
@@ -86,14 +92,14 @@ static char* redis4nginx_merge_srv_conf(ngx_conf_t *cf, void *parent, void *chil
 	redis4nginx_srv_conf_t *prev = parent;
 	redis4nginx_srv_conf_t *conf = child;
 
-	ngx_log_debug0(NGX_LOG_INFO, cf->log, 0, "mysql merge srv");
+	ngx_log_debug0(NGX_LOG_INFO, cf->log, 0, "resis4nginx merge srv");
 
 	ngx_conf_merge_str_value(conf->host,
 			prev->host, NULL);
 
 	ngx_conf_merge_value(conf->port,
 			prev->port, NGX_CONF_UNSET);
-
+        
 	return NGX_CONF_OK;
 }
 

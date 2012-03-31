@@ -38,6 +38,7 @@ static ngx_int_t parse_redis_reply(ngx_http_request_t *r, redisReply *reply, ngx
             r->headers_out.content_length_n = sizeof(null_value);            
             break;
         case REDIS_REPLY_ARRAY:
+            //TODO: add array to string
             buf->pos = (u_char*)array_value;
             buf->last = (u_char*)array_value + sizeof(array_value); 
             r->headers_out.content_length_n = sizeof(array_value); 

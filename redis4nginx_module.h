@@ -45,4 +45,13 @@ redis4nginx_ctx* redis4nginx_get_ctx(ngx_http_request_t *r, ngx_array_t *cmd_arg
 // Compute sha1 hash
 void redis4nginx_hash_script(char *digest, ngx_str_t *script);
 
+
+// Connect to redis db
+ngx_int_t redis4nginx_init_connection(ngx_str_t* host, ngx_int_t port);
+
+// Execute redis command
+int redis4nginx_async_command(redisCallbackFn *fn, void *privdata, const char *format, ...);
+
+int redis4nginx_async_command_argv(redisCallbackFn *fn, void *privdata, int argc, char **argv, const size_t *argvlen);
+
 #endif
