@@ -22,6 +22,12 @@ typedef struct {
     char hashed_script[40]; // SHA1 hash for lua script
 } redis4nginx_loc_conf_t;
 
+typedef struct {
+    char **argvs;
+    size_t *argv_lens;
+    size_t args_count;
+} redis4nginx_ctx;
+
 // EVAL
 char *redis4nginx_eval_handler_init(ngx_conf_t *cf, ngx_command_t *cmd, void *conf);
 
@@ -30,7 +36,13 @@ char *redis4nginx_command_handler_init(ngx_conf_t *cf, ngx_command_t *cmd, void 
 
 // Send json response and finalize request
 void redis4nginx_send_redis_reply(ngx_http_request_t *r, redisAsyncContext *c, redisReply *reply);
-
+// Compile command arguments
 char * compile_complex_values(ngx_conf_t *cf, ngx_array_t *output, ngx_uint_t start_compiled_arg, ngx_uint_t num_compiled_arg);
+
+// Create request context and fill it by command arguments
+redis4nginx_ctx* redis4nginx_get_ctx(ngx_http_request_t *r, ngx_array_t *cmd_arguments, ngx_uint_t addional_args);
+
+// Compute sha1 hash
+void redis4nginx_hash_script(char *digest, ngx_str_t *script);
 
 #endif

@@ -3,45 +3,21 @@
 #endif
 
 #include "ddebug.h"
-#include "sha1.h"
 #include "redis4nginx_module.h"
 #include "redis4nginx_adapter.h"
 
-static void redis4nginx_eval_callback(redisAsyncContext *c, void *repl, void *privdata);
+static char evalsha_command[] = "evalsha";
+static char eval_command[] = "eval";
 
-/* Hash the scripit into a SHA1 digest. We use this as Lua function name.
- * Digest should point to a 41 bytes buffer: 40 for SHA1 converted into an
- * hexadecimal number, plus 1 byte for null term. */
-void hash_script(char *digest, ngx_str_t *script) {
-    SHA1_CTX ctx;
-    unsigned char hash[20];
-    char *cset = "0123456789abcdef";
-    int j;
-
-    SHA1Init(&ctx);
-    SHA1Update(&ctx,(unsigned char*)script->data, script->len);
-    SHA1Final(hash,&ctx);
-
-    for (j = 0; j < 20; j++) {
-        digest[j*2] = cset[((hash[j]&0xF0)>>4)];
-        digest[j*2+1] = cset[(hash[j]&0xF)];
-    }
-    digest[40] = '\0';
-}
-
+static void redis4nginx_eval_comleted(redisAsyncContext *c, void *repl, void *privdata);
 
 ngx_int_t redis4nginx_eval_handler(ngx_http_request_t *r)
 {     
     redis4nginx_loc_conf_t *loc_conf;
     redis4nginx_srv_conf_t *serv_conf;
-    ngx_uint_t i, argv_count;
-    ngx_http_complex_value_t *compiled_values;
-    ngx_str_t value;
-    char **argv;
-    size_t *argvlen;
+    redis4nginx_ctx *ctx;
     
     serv_conf = ngx_http_get_module_srv_conf(r, redis4nginx_module);
-    
     loc_conf = ngx_http_get_module_loc_conf(r, redis4nginx_module);
 
     // connect to redis db, only if connection is lost
@@ -52,41 +28,49 @@ ngx_int_t redis4nginx_eval_handler(ngx_http_request_t *r)
     if (!(r->method & NGX_HTTP_GET))
         return NGX_HTTP_NOT_ALLOWED;
 
-    argv_count = loc_conf->cmd_arguments.nelts;
-    compiled_values = loc_conf->cmd_arguments.elts;
+    // create request context, arg 2 - reserve two places for EVAL and body of the LUA script 
+    ctx = redis4nginx_get_ctx(r, &loc_conf->cmd_arguments, 2);
+    if(ctx == NULL)
+        return NGX_ERROR;
     
-    argv = ngx_palloc(r->pool, sizeof(const char *) * (argv_count + 2));
-    argvlen = ngx_palloc(r->pool, sizeof(size_t) * (argv_count + 2));
-     
-    argv[0] = "eval";
-    argvlen[0] = 4;
+    ctx->argvs[0] = evalsha_command;
+    ctx->argv_lens[0] = sizeof(evalsha_command) -1;
 
-    argv[1] = (char*)loc_conf->script.data;
-    argvlen[1] =  loc_conf->script.len;
-    
-    if(argv_count > 0) 
-    {
-        for (i = 0; i <= argv_count - 1; i++) {
-            if (ngx_http_complex_value(r, &compiled_values[i], &value) != NGX_OK)
-                return NGX_ERROR;
-
-            argv[i+2] = (char *)value.data;
-            argvlen[i+2] = value.len;
-        }   
-    }
+    ctx->argvs[1] = loc_conf->hashed_script;//(char*)loc_conf->script.data;
+    ctx->argv_lens[1] = 40; //loc_conf->script.len;
         
-    redis4nginx_async_command_argv(redis4nginx_eval_callback, r, argv_count + 2, (const char**)argv, argvlen);
+    redis4nginx_async_command_argv(redis4nginx_eval_comleted, r, ctx->args_count, ctx->argvs, ctx->argv_lens);
     r->main->count++;
     
     return NGX_DONE;
 }
 
-static void redis4nginx_eval_callback(redisAsyncContext *c, void *repl, void *privdata)
+static void redis4nginx_eval_comleted(redisAsyncContext *c, void *repl, void *privdata)
 {
+    redis4nginx_loc_conf_t *loc_conf;
+    redis4nginx_ctx *ctx;
     ngx_http_request_t *r = privdata;
     redisReply *rr = repl;
     
-    redis4nginx_send_redis_reply(r, c, rr);
+    loc_conf = ngx_http_get_module_loc_conf(r, redis4nginx_module);
+    ctx = redis4nginx_get_ctx(r, &loc_conf->cmd_arguments, 2);
+    
+    //TODO: if(ctx == NULL){}
+    
+    if(rr->type == REDIS_REPLY_ERROR) {
+        if(strcmp(rr->str, "NOSCRIPT No matching script. Please use EVAL.") == 0) {
+            ctx->argvs[0] = eval_command;
+            ctx->argv_lens[0] = sizeof(eval_command) -1;
+
+            ctx->argvs[1] = (char*)loc_conf->script.data;
+            ctx->argv_lens[1] = loc_conf->script.len;
+    
+            redis4nginx_async_command_argv(redis4nginx_eval_comleted, r, ctx->args_count, ctx->argvs, ctx->argv_lens);
+        }         
+    }
+    else {
+        redis4nginx_send_redis_reply(r, c, rr);
+    }
 }
 
 char *redis4nginx_eval_handler_init(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
@@ -103,7 +87,7 @@ char *redis4nginx_eval_handler_init(ngx_conf_t *cf, ngx_command_t *cmd, void *co
     loc_conf->script.len = script[1].len;
     
     // compute sha1 hash
-    hash_script(loc_conf->hashed_script, &loc_conf->script);
+    redis4nginx_hash_script(loc_conf->hashed_script, &loc_conf->script);
     
     if(ngx_array_init(&loc_conf->cmd_arguments, 
                         cf->pool, 

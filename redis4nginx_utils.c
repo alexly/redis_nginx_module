@@ -4,6 +4,7 @@
 
 #include "ddebug.h"
 #include "redis4nginx_module.h"
+#include "sha1.h"
 
 //static u_char json_content_type[] = "application/json";
 
@@ -121,4 +122,64 @@ char * compile_complex_values(ngx_conf_t *cf, ngx_array_t *output, ngx_uint_t st
     }
     
     return NGX_CONF_OK;
+}
+
+redis4nginx_ctx* redis4nginx_get_ctx(ngx_http_request_t *r, ngx_array_t *cmd_arguments, ngx_uint_t addional_args)
+{
+    redis4nginx_ctx *ctx;
+    ngx_uint_t i, argv_count;
+    ngx_http_complex_value_t *compiled_values;
+    ngx_str_t value;
+    
+    ctx = ngx_http_get_module_ctx(r, redis4nginx_module);
+    if (ctx == NULL) {
+        ctx = ngx_palloc(r->pool, sizeof(redis4nginx_ctx));
+        
+        if (ctx == NULL) {
+            return NULL;
+        }
+        
+        argv_count = cmd_arguments->nelts;
+        compiled_values = cmd_arguments->elts;
+
+        ctx->argvs = ngx_palloc(r->pool, sizeof(const char *) * (argv_count + addional_args));
+        ctx->argv_lens = ngx_palloc(r->pool, sizeof(size_t) * (argv_count + addional_args));
+
+        if(argv_count > 0) 
+        {
+            for (i = 0; i <= argv_count - 1; i++) {
+                if (ngx_http_complex_value(r, &compiled_values[i], &value) != NGX_OK)
+                    return NULL;
+
+                ctx->argvs[i + addional_args] = (char *)value.data;
+                ctx->argv_lens[i + addional_args] = value.len;
+            }
+        }
+
+        ctx->args_count = argv_count + addional_args;
+        
+        ngx_http_set_ctx(r, ctx, redis4nginx_module);
+    }
+        
+    return ctx;
+}
+
+/* Hash the scripit into a SHA1 digest. We use this as Lua function name.
+ * Digest should point to a 41 bytes buffer: 40 for SHA1 converted into an
+ * hexadecimal number, plus 1 byte for null term. */
+void redis4nginx_hash_script(char *digest, ngx_str_t *script) {
+    SHA1_CTX ctx;
+    unsigned char hash[20];
+    char *cset = "0123456789abcdef";
+    int j;
+
+    SHA1Init(&ctx);
+    SHA1Update(&ctx,(unsigned char*)script->data, script->len);
+    SHA1Final(hash,&ctx);
+
+    for (j = 0; j < 20; j++) {
+        digest[j*2] = cset[((hash[j]&0xF0)>>4)];
+        digest[j*2+1] = cset[(hash[j]&0xF)];
+    }
+    digest[40] = '\0';
 }

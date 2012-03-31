@@ -84,9 +84,9 @@ int redis4nginx_async_command(redisCallbackFn *fn, void *privdata, const char *f
     return status;
 }
 
-int redis4nginx_async_command_argv(redisCallbackFn *fn, void *privdata, int argc, const char **argv, const size_t *argvlen)
+int redis4nginx_async_command_argv(redisCallbackFn *fn, void *privdata, int argc, char **argv, const size_t *argvlen)
 {
-    return redisAsyncCommandArgv(redis4nginx_connection->async, fn, privdata, argc, argv, argvlen);
+    return redisAsyncCommandArgv(redis4nginx_connection->async, fn, privdata, argc, (const char**)argv, argvlen);
 }
 
 static void ngx_redis_add_read(void *privdata)
