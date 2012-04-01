@@ -6,8 +6,6 @@
 #include "redis4nginx_module.h"
 #include "sha1.h"
 
-//static u_char json_content_type[] = "application/json";
-
 static u_char null_value[] = "NULL";
 static u_char array_value[] = "REDIS_REPLY_ARRAY";
 
@@ -183,4 +181,17 @@ void redis4nginx_hash_script(char *digest, ngx_str_t *script) {
         digest[j*2+1] = cset[(hash[j]&0xF)];
     }
     digest[40] = '\0';
+}
+
+char* ngx_string_to_c_string(ngx_str_t *str, ngx_pool_t *pool)
+{
+    char* result = NULL;
+    if(str != NULL && str->len > 0) 
+    {
+        result = ngx_palloc(pool == NULL ? ngx_cycle->pool : pool, str->len + 1);
+        memcpy(result, str->data, str->len);
+        result[str->len] = '\0';   
+    }
+    
+    return result;
 }

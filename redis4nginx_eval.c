@@ -4,7 +4,6 @@
 
 #include "ddebug.h"
 #include "redis4nginx_module.h"
-#include "redis4nginx_adapter.h"
 
 static char evalsha_command[] = "evalsha";
 static char eval_command[] = "eval";
@@ -15,12 +14,9 @@ ngx_int_t redis4nginx_eval_handler(ngx_http_request_t *r)
 {     
     redis4nginx_loc_conf_t *loc_conf;
     redis4nginx_ctx *ctx;
-    redis4nginx_srv_conf_t *serv_conf;
-        
-    serv_conf = ngx_http_get_module_srv_conf(r, redis4nginx_module);
-    
+
     // connect to redis db, only if connection is lost
-    if(redis4nginx_init_connection(&serv_conf->host, serv_conf->port) != NGX_OK)
+    if(redis4nginx_init_connection(ngx_http_get_module_srv_conf(r, redis4nginx_module)) != NGX_OK)
         return NGX_ERROR;
     
     // we response to 'GET' and 'HEAD' requests only 
@@ -67,48 +63,17 @@ static void redis4nginx_eval_comleted(redisAsyncContext *c, void *repl, void *pr
 
         //TODO: if(ctx == NULL){}
 
-        if(rr->type == REDIS_REPLY_ERROR) {
-            if(strcmp(rr->str, "NOSCRIPT No matching script. Please use EVAL.") == 0) {
-                
-                ctx->argvs[0] = eval_command;
-                ctx->argv_lens[0] = sizeof(eval_command) -1;
+        if(is_noscript_error(rr)) {
+            ctx->argvs[0] = eval_command;
+            ctx->argv_lens[0] = sizeof(eval_command) -1;
 
-                ctx->argvs[1] = (char*)loc_conf->script.data;
-                ctx->argv_lens[1] = loc_conf->script.len;
+            ctx->argvs[1] = (char*)loc_conf->script.data;
+            ctx->argv_lens[1] = loc_conf->script.len;
 
-                redis4nginx_async_command_argv(redis4nginx_eval_comleted, r, ctx->args_count, ctx->argvs, ctx->argv_lens);
-            }         
+            redis4nginx_async_command_argv(redis4nginx_eval_comleted, r, ctx->args_count, ctx->argvs, ctx->argv_lens);
         }
         else {
             redis4nginx_send_redis_reply(r, c, rr);
         }
     }
-}
-
-char *redis4nginx_eval_handler_init(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
-{
-    redis4nginx_loc_conf_t *loc_conf = conf;
-    ngx_http_core_loc_conf_t *core_conf;
-    ngx_str_t * script;
-
-	core_conf = ngx_http_conf_get_module_loc_conf(cf, ngx_http_core_module);
-	core_conf->handler = &redis4nginx_eval_handler;
-    
-    script = cf->args->elts;
-    loc_conf->script.data = script[1].data;
-    loc_conf->script.len = script[1].len;
-    
-    // compute sha1 hash
-    redis4nginx_hash_script(loc_conf->hashed_script, &loc_conf->script);
-    
-    if(ngx_array_init(&loc_conf->cmd_arguments, 
-                        cf->pool, 
-                        cf->args->nelts - 2, //without redis_command and lua script
-                        sizeof(ngx_http_complex_value_t)) != NGX_OK) 
-    {
-        return NGX_CONF_ERROR;
-    }
-    
-    return compile_complex_values(cf, &loc_conf->cmd_arguments, 2, cf->args->nelts);
-    
 }

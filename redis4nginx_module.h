@@ -1,9 +1,9 @@
 #ifndef __NGX_REDIS_MODULE__
 #define __NGX_REDIS_MODULE__
 
-// hiredis headers
+// hiredis
 #include "hiredis/async.h"
-
+// nginx
 #include <ngx_config.h>
 #include <ngx_core.h>
 #include <ngx_http.h>
@@ -11,9 +11,9 @@
 extern ngx_module_t redis4nginx_module;
 
 typedef struct {
-	ngx_str_t host;
-	ngx_int_t port;
-
+    ngx_str_t host;
+    ngx_int_t port;
+    ngx_str_t startup_script;
 } redis4nginx_srv_conf_t;
 
 typedef struct {
@@ -28,14 +28,21 @@ typedef struct {
     size_t args_count;
 } redis4nginx_ctx;
 
-// EVAL
-char *redis4nginx_eval_handler_init(ngx_conf_t *cf, ngx_command_t *cmd, void *conf);
+// Connect to redis db
+ngx_int_t redis4nginx_init_connection(redis4nginx_srv_conf_t *serv_conf);
 
-//Other redis commands
-char *redis4nginx_command_handler_init(ngx_conf_t *cf, ngx_command_t *cmd, void *conf);
+// Execute redis command with format command
+ngx_int_t redis4nginx_async_command(redisCallbackFn *fn, void *privdata, const char *format, ...);
+
+// Execute redis command
+ngx_int_t redis4nginx_async_command_argv(redisCallbackFn *fn, void *privdata, int argc, char **argv, const size_t *argvlen);
+
+// Check the reason
+ngx_int_t is_noscript_error(redisReply *reply);
 
 // Send json response and finalize request
 void redis4nginx_send_redis_reply(ngx_http_request_t *r, redisAsyncContext *c, redisReply *reply);
+
 // Compile command arguments
 char * compile_complex_values(ngx_conf_t *cf, ngx_array_t *output, ngx_uint_t start_compiled_arg, ngx_uint_t num_compiled_arg);
 
@@ -45,13 +52,6 @@ redis4nginx_ctx* redis4nginx_get_ctx(ngx_http_request_t *r, ngx_array_t *cmd_arg
 // Compute sha1 hash
 void redis4nginx_hash_script(char *digest, ngx_str_t *script);
 
-
-// Connect to redis db
-ngx_int_t redis4nginx_init_connection(ngx_str_t* host, ngx_int_t port);
-
-// Execute redis command
-int redis4nginx_async_command(redisCallbackFn *fn, void *privdata, const char *format, ...);
-
-int redis4nginx_async_command_argv(redisCallbackFn *fn, void *privdata, int argc, char **argv, const size_t *argvlen);
+char* ngx_string_to_c_string(ngx_str_t *str, ngx_pool_t *pool);
 
 #endif
