@@ -1,6 +1,10 @@
 #ifndef __NGX_REDIS_MODULE__
 #define __NGX_REDIS_MODULE__
 
+#define REDIS4NGINX_JSON_FIELD_ARG      0
+#define REDIS4NGINX_COMPILIED_ARG       1
+#define REDIS4NGINX_STRING_ARG          2
+
 // hiredis
 #include "hiredis/async.h"
 // nginx
@@ -11,47 +15,74 @@
 extern ngx_module_t redis4nginx_module;
 
 typedef struct {
+    ngx_array_t arguments;          // arguments for redis_command/redis_eval
+    unsigned final:1;               // 1 - returns reply, 0 - only exec redis command
+} redis4nginx_directive_t;
+
+typedef struct {
+    ngx_uint_t type;
+    union {
+        ngx_str_t string_value;
+        ngx_http_complex_value_t *compilied;
+    };
+} redis4nginx_directive_arg_t;
+
+typedef struct {
+    ngx_array_t directives;
+    redis4nginx_directive_t *final_directive; // directive which completes the request and returns the data
+    unsigned needed_load_scripts:1;
+} redis4nginx_loc_conf_t;
+
+typedef struct {
     ngx_str_t host;
     ngx_int_t port;
     ngx_str_t startup_script;
+    ngx_array_t *startup_scripts;
 } redis4nginx_srv_conf_t;
-
-typedef struct {
-    ngx_array_t cmd_arguments; // arguments for redis_command/redis_eval
-    ngx_str_t script; // lua script, only for redis_eval
-    char hashed_script[40]; // SHA1 hash for lua script
-} redis4nginx_loc_conf_t;
 
 typedef struct {
     char **argvs;
     size_t *argv_lens;
     size_t args_count;
+    ngx_uint_t current_directive;
+    ngx_uint_t direcive_count;
 } redis4nginx_ctx;
 
 // Connect to redis db
-ngx_int_t redis4nginx_init_connection(redis4nginx_srv_conf_t *serv_conf);
+ngx_int_t
+redis4nginx_init_connection(redis4nginx_srv_conf_t *serv_conf);
 
 // Execute redis command with format command
-ngx_int_t redis4nginx_async_command(redisCallbackFn *fn, void *privdata, const char *format, ...);
+ngx_int_t
+redis4nginx_async_command(redisCallbackFn *fn, void *privdata, const char *format, ...);
 
 // Execute redis command
-ngx_int_t redis4nginx_async_command_argv(redisCallbackFn *fn, void *privdata, int argc, char **argv, const size_t *argvlen);
-
-// Check the reason
-ngx_int_t is_noscript_error(redisReply *reply);
+ngx_int_t
+redis4nginx_async_command_argv(redisCallbackFn *fn, void *privdata, int argc, char **argv, const size_t *argvlen);
 
 // Send json response and finalize request
-void redis4nginx_send_redis_reply(ngx_http_request_t *r, redisAsyncContext *c, redisReply *reply);
-
-// Compile command arguments
-char * compile_complex_values(ngx_conf_t *cf, ngx_array_t *output, ngx_uint_t start_compiled_arg, ngx_uint_t num_compiled_arg);
-
-// Create request context and fill it by command arguments
-redis4nginx_ctx* redis4nginx_get_ctx(ngx_http_request_t *r, ngx_array_t *cmd_arguments, ngx_uint_t addional_args);
+void
+redis4nginx_send_redis_reply(ngx_http_request_t *r, redisAsyncContext *c, redisReply *reply);
 
 // Compute sha1 hash
-void redis4nginx_hash_script(char *digest, ngx_str_t *script);
+void
+redis4nginx_hash_script(ngx_str_t *digest, ngx_str_t *script);
 
-char* ngx_string_to_c_string(ngx_str_t *str, ngx_pool_t *pool);
+char *
+ngx_string_to_c_string(ngx_str_t *str, ngx_pool_t *pool);
+
+typedef ngx_int_t (redis_4nginx_process_directive)(ngx_http_request_t*, redis4nginx_directive_t*);
+
+ngx_int_t
+redis4nginx_interate_directives(ngx_http_request_t *r, ngx_array_t *directives, redis_4nginx_process_directive directive);
+
+ngx_int_t
+redis4nginx_get_directive_argument_value(ngx_http_request_t *r, redis4nginx_directive_arg_t *arg, ngx_str_t* out);
+
+char *
+redis4nginx_compile_directive_arguments(ngx_conf_t *cf, redis4nginx_loc_conf_t * loc_conf, redis4nginx_srv_conf_t *srv_conf, redis4nginx_directive_t *directive);
+
+ngx_int_t
+redis4nginx_copy_str(ngx_str_t *dest, ngx_str_t *src, size_t offset, size_t len, ngx_pool_t *pool);
 
 #endif

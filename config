@@ -3,8 +3,8 @@ HTTP_MODULES="$HTTP_MODULES redis4nginx_module"
 NGX_ADDON_SRCS="$NGX_ADDON_SRCS $ngx_addon_dir/redis4nginx_adapter.c 
                 $ngx_addon_dir/redis4nginx_module.c 
                 $ngx_addon_dir/redis4nginx_utils.c 
-                $ngx_addon_dir/redis4nginx_eval.c 
-                $ngx_addon_dir/redis4nginx_command.c 
+                $ngx_addon_dir/redis4nginx_handler.c 
+                $ngx_addon_dir/redis4nginx_directive.c 
                 $ngx_addon_dir/sha1.c 
                 $ngx_addon_dir/hiredis/sds.c
                 $ngx_addon_dir/hiredis/net.c 

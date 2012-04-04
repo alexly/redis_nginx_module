@@ -8,10 +8,11 @@
 static void* redis4nginx_create_srv_conf(ngx_conf_t *cf);
 static char* redis4nginx_merge_srv_conf(ngx_conf_t *cf, void *parent, void *child);
 static void* redis4nginx_create_loc_conf(ngx_conf_t *cf);
-static char *redis4nginx_eval_handler_init(ngx_conf_t *cf, ngx_command_t *cmd, void *conf);
-static char *redis4nginx_command_handler_init(ngx_conf_t *cf, ngx_command_t *cmd, void *conf);
-ngx_int_t redis4nginx_command_handler(ngx_http_request_t *r);
-ngx_int_t redis4nginx_eval_handler(ngx_http_request_t *r);
+static char *redis4nginx_exec_handler_init(ngx_conf_t *cf, ngx_command_t *cmd, void *conf);
+static char *redis4nginx_exec_return_handler_init(ngx_conf_t *cf, ngx_command_t *cmd, void *conf);
+ngx_int_t redis4nginx_exec_handler(ngx_http_request_t *r);
+
+static redis4nginx_srv_conf_t *redis4nginx_srv_conf;
 
 static ngx_command_t  redis4nginx_commands[] = {
     {	ngx_string("redis_host"),
@@ -35,42 +36,38 @@ static ngx_command_t  redis4nginx_commands[] = {
         offsetof(redis4nginx_srv_conf_t, startup_script),
         NULL },
 
-    {   ngx_string("redis_eval"),
-        NGX_HTTP_LOC_CONF|NGX_CONF_ANY,
-        redis4nginx_eval_handler_init,
+    {   ngx_string("redis_exec"),
+        NGX_HTTP_LOC_CONF|NGX_HTTP_LIF_CONF|NGX_CONF_ANY,
+        redis4nginx_exec_handler_init,
         NGX_HTTP_LOC_CONF_OFFSET,
         0,
         NULL },
         
-    {   ngx_string("redis_command"),
-        NGX_HTTP_LOC_CONF|NGX_CONF_ANY,
-        redis4nginx_command_handler_init,
+    {   ngx_string("redis_exec_return"),
+        NGX_HTTP_LOC_CONF|NGX_HTTP_LIF_CONF|NGX_CONF_ANY,
+        redis4nginx_exec_return_handler_init,
         NGX_HTTP_LOC_CONF_OFFSET,
         0,
-        NULL },
-        
+        NULL },    
     ngx_null_command
 };
 
 static ngx_http_module_t  redis4nginx_module_ctx = {
-  NULL,                          // preconfiguration
-  NULL,                          // postconfiguration
-
-  NULL,                          // create main configuration
-  NULL,                          // init main configuration
-
-  redis4nginx_create_srv_conf,  // create server configuration 
-  redis4nginx_merge_srv_conf,   // merge server configuration
-
-  redis4nginx_create_loc_conf,  // create location configuration */
+  NULL,                          /* preconfiguration */
+  NULL,                          /* postconfiguration */
+  NULL,                          /* create main configuration */
+  NULL,                          /* init main configuration */
+  redis4nginx_create_srv_conf,  /* create server configuration */
+  redis4nginx_merge_srv_conf,   /* merge server configuration */
+  redis4nginx_create_loc_conf,  /* create location configuration */
   NULL                          /* merge location configuration char* redis4nginx_merge_loc_conf(ngx_conf_t *cf, void *parent, void *child);*/
 };
 
 
 ngx_module_t redis4nginx_module = {
   NGX_MODULE_V1,
-  &redis4nginx_module_ctx, /* module context */
-  redis4nginx_commands,   /* module directives */
+  &redis4nginx_module_ctx,      /* module context */
+  redis4nginx_commands,         /* module directives */
   NGX_HTTP_MODULE,              /* module type */
   NULL,                         /* init master */
   NULL,                         /* init module ngx_int_t redis4nginx_init_module(ngx_cycle_t *cycle);*/
@@ -84,11 +81,11 @@ ngx_module_t redis4nginx_module = {
 
 static void* redis4nginx_create_srv_conf(ngx_conf_t *cf)
 {
-    redis4nginx_srv_conf_t *conf = ngx_pcalloc(cf->pool, sizeof(redis4nginx_srv_conf_t));
+    redis4nginx_srv_conf = ngx_pcalloc(cf->pool, sizeof(redis4nginx_srv_conf_t));
 
-    conf->port = NGX_CONF_UNSET;
+    redis4nginx_srv_conf->port = NGX_CONF_UNSET;
 
-    return conf;
+    return redis4nginx_srv_conf;
 }
 
 static char* redis4nginx_merge_srv_conf(ngx_conf_t *cf, void *parent, void *child)
@@ -110,49 +107,38 @@ static char* redis4nginx_merge_srv_conf(ngx_conf_t *cf, void *parent, void *chil
 static void* redis4nginx_create_loc_conf(ngx_conf_t *cf)
 {
 	redis4nginx_loc_conf_t *conf = ngx_pcalloc(cf->pool, sizeof(redis4nginx_loc_conf_t));
-
+    
+    ngx_array_init(&conf->directives, cf->pool, 1, sizeof(redis4nginx_directive_t));
+    conf->final_directive = NULL;
+    
 	return conf;
 }
 
-static char *redis4nginx_command_handler_init(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
+static char *redis4nginx_exec_handler_init(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
+{
+    redis4nginx_loc_conf_t *loc_conf = conf;
+
+    redis4nginx_directive_t *directive = ngx_array_push(&loc_conf->directives);
+    directive->final = 0;
+    
+    return redis4nginx_compile_directive_arguments(cf, loc_conf, redis4nginx_srv_conf, directive);
+}
+
+static char *redis4nginx_exec_return_handler_init(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
 {
     redis4nginx_loc_conf_t *loc_conf = conf;
     ngx_http_core_loc_conf_t *core_conf;
-
+    redis4nginx_directive_t *directive;
+    
+    if(loc_conf->final_directive != NULL)
+        return "redis4nginx - final directive already exists";
+    
     core_conf = ngx_http_conf_get_module_loc_conf(cf, ngx_http_core_module);
-    core_conf->handler = &redis4nginx_command_handler;
-    
-    if(ngx_array_init(&loc_conf->cmd_arguments, cf->pool, cf->args->nelts - 1, sizeof(ngx_http_complex_value_t)) != NGX_OK) {
-        return NGX_CONF_ERROR;
-    }
-    
-    return compile_complex_values(cf, &loc_conf->cmd_arguments, 1, cf->args->nelts);
+    core_conf->handler = &redis4nginx_exec_handler;
+    loc_conf->final_directive = ngx_palloc(cf->pool, sizeof(redis4nginx_directive_t));
+    directive = loc_conf->final_directive;
+    directive->final = 1;
+            
+    return redis4nginx_compile_directive_arguments(cf, loc_conf, redis4nginx_srv_conf, directive);
 }
 
-static char *redis4nginx_eval_handler_init(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
-{
-    redis4nginx_loc_conf_t *loc_conf = conf;
-    ngx_http_core_loc_conf_t *core_conf;
-    ngx_str_t * script;
-
-	core_conf = ngx_http_conf_get_module_loc_conf(cf, ngx_http_core_module);
-	core_conf->handler = &redis4nginx_eval_handler;
-    
-    script = cf->args->elts;
-    loc_conf->script.data = script[1].data;
-    loc_conf->script.len = script[1].len;
-    
-    // compute sha1 hash
-    redis4nginx_hash_script(loc_conf->hashed_script, &loc_conf->script);
-    
-    if(ngx_array_init(&loc_conf->cmd_arguments, 
-                        cf->pool, 
-                        cf->args->nelts - 2, //without redis_command and lua script
-                        sizeof(ngx_http_complex_value_t)) != NGX_OK) 
-    {
-        return NGX_CONF_ERROR;
-    }
-    
-    return compile_complex_values(cf, &loc_conf->cmd_arguments, 2, cf->args->nelts);
-    
-}

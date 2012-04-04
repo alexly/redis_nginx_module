@@ -12,7 +12,6 @@ typedef struct redis4nginx_connection_ctx_t {
     ngx_connection_t *conn;
     unsigned connected:1;
     char* host;
-    char* sturtup_script;
     ngx_int_t port;
 } redis4nginx_connection_ctx_t;
 
@@ -33,19 +32,22 @@ static void redis4nginx_cleanup(void *privdata);
 
 ngx_int_t redis4nginx_init_connection(redis4nginx_srv_conf_t *serv_conf)
 {    
+    ngx_uint_t i;
+    ngx_str_t *script;
+    
     if(redis4nginx_conn == NULL)
     {    
         if(serv_conf == NULL)
             return NGX_ERROR;
         
         redis4nginx_conn = ngx_palloc(ngx_cycle->pool, sizeof(redis4nginx_connection_ctx_t));
-        redis4nginx_conn->host = ngx_string_to_c_string(&serv_conf->host, NULL);        
-        redis4nginx_conn->sturtup_script = ngx_string_to_c_string(&serv_conf->startup_script, NULL);        
+        redis4nginx_conn->host = ngx_string_to_c_string(&serv_conf->host, NULL);              
         redis4nginx_conn->port = serv_conf->port;
         redis4nginx_conn->connected = 0;
     }
 
-    if(redis4nginx_conn->connected == 0) {
+    if(redis4nginx_conn->connected == 0) 
+    {
         if(redis4nginx_conn->port >=0) {
             redis4nginx_conn->async = redisAsyncConnect(
                         (const char*)redis4nginx_conn->host,
@@ -80,19 +82,23 @@ ngx_int_t redis4nginx_init_connection(redis4nginx_srv_conf_t *serv_conf)
         redis4nginx_conn->async->ev.data = redis4nginx_conn;
         redis4nginx_conn->async->ev.cleanup = redis4nginx_cleanup;
 
-        if(redis4nginx_conn->sturtup_script != NULL)
-        {
-            // load startup script to redis db
-            redis4nginx_async_command(NULL, NULL, "eval %s 0", redis4nginx_conn->sturtup_script);
+        if(serv_conf == NULL)
+            return NGX_ERROR;
+        
+        // load all scripts to redis db
+        
+        if(serv_conf->startup_script.len > 0)
+            redis4nginx_async_command(NULL, NULL, "eval %b 0", serv_conf->startup_script.data, serv_conf->startup_script.len);
+        
+        if(serv_conf->startup_scripts != NULL)  {
+            script = serv_conf->startup_scripts->elts;
+            
+            for(i=0; i < serv_conf->startup_scripts->nelts; i++)
+                redis4nginx_async_command(NULL, NULL, "eval %b 0", (&script[i])->data, (&script[i])->len);
         }
     }
 
     return NGX_OK;
-}
-
-static ngx_int_t redis4nginx_reinit_connection()
-{
-    return redis4nginx_init_connection(NULL);
 }
 
 ngx_int_t redis4nginx_async_command(redisCallbackFn *fn, void *privdata, const char *format, ...) 
@@ -101,39 +107,18 @@ ngx_int_t redis4nginx_async_command(redisCallbackFn *fn, void *privdata, const c
     int status;
     
     va_start(ap,format);
-    status = redisvAsyncCommand(redis4nginx_conn->async,fn,privdata,format,ap);
+    status = redisvAsyncCommand(redis4nginx_conn->async,fn, privdata, format, ap);
     va_end(ap);
-
-    if(status != REDIS_OK)
-    {
-        redis4nginx_reinit_connection();
-        return NGX_ERROR;
-    }
     
-    return NGX_OK;
+    return status == REDIS_OK ?  NGX_OK : NGX_ERROR;
 }
 
 ngx_int_t redis4nginx_async_command_argv(redisCallbackFn *fn, void *privdata, int argc, char **argv, const size_t *argvlen)
 {
-    if(redisAsyncCommandArgv(redis4nginx_conn->async, 
-        fn, privdata, argc, (const char**)argv, argvlen) != REDIS_OK) 
-    {
-        redis4nginx_reinit_connection();
-        return NGX_ERROR;
-    }
-        
-    return NGX_OK;
-}
-
-ngx_int_t is_noscript_error(redisReply *reply)
-{
-    if(reply->type == REDIS_REPLY_ERROR
-        && strcmp(reply->str, "NOSCRIPT No matching script. Please use EVAL.") == 0) 
-    {
-        return 1;
-    }
+    int status;
+    status = redisAsyncCommandArgv(redis4nginx_conn->async, fn, privdata, argc, (const char**)argv, argvlen);
     
-    return 0;
+    return status == REDIS_OK ?  NGX_OK : NGX_ERROR;
 }
 
 static void redis4nginx_connecte_event_handler(const redisAsyncContext *ctx)
@@ -146,8 +131,6 @@ static void redis4nginx_disconnect_event_handler(const redisAsyncContext *ctx, i
 {
     redis4nginx_connection_ctx_t *context  = ctx->data;
     context->connected = 0;
-    
-    redis4nginx_reinit_connection(); // fake arguments
 }
 
 static void redis4nginx_read_event_handler(ngx_event_t *handle)

@@ -93,80 +93,10 @@ void redis4nginx_send_redis_reply(ngx_http_request_t *r, redisAsyncContext *c, r
     ngx_http_finalize_request(r, NGX_DONE);
 }
 
-char * compile_complex_values(ngx_conf_t *cf, ngx_array_t *output, ngx_uint_t start_compiled_arg, ngx_uint_t num_compiled_arg)
-{
-    ngx_str_t                          *value;
-    ngx_uint_t                          i;
-    ngx_http_complex_value_t           *cv;
-    ngx_http_compile_complex_value_t    ccv;
-    
-    value = cf->args->elts;
-    
-    for (i = start_compiled_arg; i < num_compiled_arg; i++)
-    {
-        cv = ngx_array_push(output);
-        if (cv == NULL) {
-            return NGX_CONF_ERROR;
-        }
-
-        ngx_memzero(&ccv, sizeof(ngx_http_compile_complex_value_t));
-
-        ccv.cf = cf;
-        ccv.value = &value[i];
-        ccv.complex_value = cv;
-
-        if (ngx_http_compile_complex_value(&ccv) != NGX_OK) {
-            return NGX_CONF_ERROR;
-        }
-    }
-    
-    return NGX_CONF_OK;
-}
-
-redis4nginx_ctx* redis4nginx_get_ctx(ngx_http_request_t *r, ngx_array_t *cmd_arguments, ngx_uint_t addional_args)
-{
-    redis4nginx_ctx *ctx;
-    ngx_uint_t i, argv_count;
-    ngx_http_complex_value_t *compiled_values;
-    ngx_str_t value;
-    
-    ctx = ngx_http_get_module_ctx(r, redis4nginx_module);
-    if (ctx == NULL) {
-        ctx = ngx_palloc(r->pool, sizeof(redis4nginx_ctx));
-        
-        if (ctx == NULL) {
-            return NULL;
-        }
-        
-        argv_count = cmd_arguments->nelts;
-        compiled_values = cmd_arguments->elts;
-
-        ctx->argvs = ngx_palloc(r->pool, sizeof(const char *) * (argv_count + addional_args));
-        ctx->argv_lens = ngx_palloc(r->pool, sizeof(size_t) * (argv_count + addional_args));
-
-        if(argv_count > 0) 
-        {
-            for (i = 0; i <= argv_count - 1; i++) {
-                if (ngx_http_complex_value(r, &compiled_values[i], &value) != NGX_OK)
-                    return NULL;
-
-                ctx->argvs[i + addional_args] = (char *)value.data;
-                ctx->argv_lens[i + addional_args] = value.len;
-            }
-        }
-
-        ctx->args_count = argv_count + addional_args;
-        
-        ngx_http_set_ctx(r, ctx, redis4nginx_module);
-    }
-        
-    return ctx;
-}
-
 /* Hash the scripit into a SHA1 digest. We use this as Lua function name.
  * Digest should point to a 41 bytes buffer: 40 for SHA1 converted into an
  * hexadecimal number, plus 1 byte for null term. */
-void redis4nginx_hash_script(char *digest, ngx_str_t *script) {
+void redis4nginx_hash_script(ngx_str_t *digest, ngx_str_t *script) {
     SHA1_CTX ctx;
     unsigned char hash[20];
     char *cset = "0123456789abcdef";
@@ -177,10 +107,11 @@ void redis4nginx_hash_script(char *digest, ngx_str_t *script) {
     SHA1Final(hash,&ctx);
 
     for (j = 0; j < 20; j++) {
-        digest[j*2] = cset[((hash[j]&0xF0)>>4)];
-        digest[j*2+1] = cset[(hash[j]&0xF)];
+        digest->data[j*2] = cset[((hash[j]&0xF0)>>4)];
+        digest->data[j*2+1] = cset[(hash[j]&0xF)];
     }
-    digest[40] = '\0';
+    
+    digest->len = 40;
 }
 
 char* ngx_string_to_c_string(ngx_str_t *str, ngx_pool_t *pool)
@@ -194,4 +125,20 @@ char* ngx_string_to_c_string(ngx_str_t *str, ngx_pool_t *pool)
     }
     
     return result;
+}
+
+ngx_int_t redis4nginx_copy_str(ngx_str_t *dest, ngx_str_t *src, size_t offset, size_t len, ngx_pool_t *pool)
+{
+    ngx_pool_t *use_pool;
+    use_pool = pool == NULL ? ngx_cycle->pool : pool;
+    
+    dest->data = ngx_palloc(use_pool, len);
+    
+    if(dest->data == NULL)
+        return NGX_ERROR;
+    
+    memcpy(dest->data, src->data + offset, len);
+    dest->len = len;
+    
+    return NGX_OK;
 }
