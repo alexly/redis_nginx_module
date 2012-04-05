@@ -40,6 +40,7 @@ typedef struct {
 
 typedef struct {
     unsigned completed:1;
+    unsigned wait_read_body:1;
 } redis4nginx_ctx;
 
 typedef ngx_int_t (redis_4nginx_process_directive)(ngx_http_request_t*, redis4nginx_directive_t*);
