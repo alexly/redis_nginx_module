@@ -109,7 +109,6 @@ static void* redis4nginx_create_loc_conf(ngx_conf_t *cf)
 	redis4nginx_loc_conf_t *conf = ngx_pcalloc(cf->pool, sizeof(redis4nginx_loc_conf_t));
     
     ngx_array_init(&conf->directives, cf->pool, 1, sizeof(redis4nginx_directive_t));
-    conf->final_directive = NULL;
     
 	return conf;
 }
@@ -130,13 +129,13 @@ static char *redis4nginx_exec_return_handler_init(ngx_conf_t *cf, ngx_command_t 
     ngx_http_core_loc_conf_t *core_conf;
     redis4nginx_directive_t *directive;
     
-    if(loc_conf->final_directive != NULL)
-        return "redis4nginx - final directive already exists";
-    
     core_conf = ngx_http_conf_get_module_loc_conf(cf, ngx_http_core_module);
-    core_conf->handler = &redis4nginx_exec_handler;
-    loc_conf->final_directive = ngx_palloc(cf->pool, sizeof(redis4nginx_directive_t));
-    directive = loc_conf->final_directive;
+
+    if(core_conf->handler == NULL) {
+        core_conf->handler = &redis4nginx_exec_handler;
+    }
+    
+    directive = ngx_array_push(&loc_conf->directives);
     directive->final = 1;
             
     return redis4nginx_compile_directive_arguments(cf, loc_conf, redis4nginx_srv_conf, directive);

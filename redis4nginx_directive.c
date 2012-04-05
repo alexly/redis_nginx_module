@@ -7,41 +7,7 @@
 
 static ngx_str_t  evalsha_command_name = ngx_string("evalsha");
 
-ngx_int_t redis4nginx_process_directive(ngx_http_request_t *r, redis4nginx_directive_t *directive)
-{
-    ngx_uint_t i;
-    redis4nginx_directive_arg_t *directive_arg;
-    ngx_str_t value;
-    char **argvs;
-    size_t *argv_lens;
-    
-    directive_arg = directive->arguments.elts;
-    argvs = ngx_palloc(r->pool, sizeof(const char *) * (directive->arguments.nelts));
-    argv_lens = ngx_palloc(r->pool, sizeof(size_t) * (directive->arguments.nelts));
-        
-    if(directive->arguments.nelts > 0)
-    {
-        for (i = 0; i <= directive->arguments.nelts - 1; i++)
-        {
-            
-            if(redis4nginx_get_directive_argument_value(r, &directive_arg[i], &value) != NGX_OK)
-                return NGX_ERROR;
-
-            argvs[i] = (char *)value.data;
-            argv_lens[i] = value.len;
-        }
-    }
-    
-    if(redis4nginx_async_command_argv(directive->final ?  redis4nginx_exec_return_callback : NULL, 
-                                    r,  directive->arguments.nelts, argvs, argv_lens) != NGX_OK)
-    {
-        return NGX_ERROR;
-    }
-    
-    return NGX_OK;
-}
-
-ngx_int_tredis4nginx_interate_directives(ngx_http_request_t *r, ngx_array_t *directives, redis_4nginx_process_directive process)
+ngx_int_t redis4nginx_interate_directives(ngx_http_request_t *r, ngx_array_t *directives, redis_4nginx_process_directive process)
 {
     redis4nginx_directive_t *directive;
     ngx_uint_t i, directive_count;
