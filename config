@@ -10,6 +10,14 @@ NGX_ADDON_SRCS="$NGX_ADDON_SRCS $ngx_addon_dir/redis4nginx_adapter.c
                 $ngx_addon_dir/hiredis/net.c 
                 $ngx_addon_dir/hiredis/hiredis.c 
                 $ngx_addon_dir/hiredis/async.c  
+                $ngx_addon_dir/yajl/yajl.c 
+                $ngx_addon_dir/yajl/yajl_alloc.c 
+                $ngx_addon_dir/yajl/yajl_buf.c 
+                $ngx_addon_dir/yajl/yajl_encode.c 
+                $ngx_addon_dir/yajl/yajl_gen.c  
+                $ngx_addon_dir/yajl/yajl_lex.c 
+                $ngx_addon_dir/yajl/yajl_parser.c 
+                $ngx_addon_dir/yajl/yajl_tree.c 
                 "
 
 NGX_ADDON_DEPS="$NGX_ADDON_DEPS $ngx_addon_dir/redis4nginx_module.h"

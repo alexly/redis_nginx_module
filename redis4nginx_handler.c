@@ -62,10 +62,15 @@ ngx_int_t redis4nginx_exec_handler(ngx_http_request_t *r)
 {     
     redis4nginx_loc_conf_t *loc_conf;
     redis4nginx_ctx *ctx;
-            
+    redis4nginx_directive_t *directive;
+    ngx_uint_t i, directive_count;
+        
     loc_conf = ngx_http_get_module_loc_conf(r, redis4nginx_module);
     
     ctx = ngx_http_get_module_ctx(r, redis4nginx_module);
+    
+    directive = loc_conf->directives.elts;
+    directive_count = loc_conf->directives.nelts;
     
     if(ctx == NULL) {
         ctx = ngx_palloc(r->pool, sizeof(redis4nginx_ctx));
@@ -78,15 +83,24 @@ ngx_int_t redis4nginx_exec_handler(ngx_http_request_t *r)
         return NGX_HTTP_INTERNAL_SERVER_ERROR;
             
     // we response to 'GET' and 'HEAD' requests only 
-    if (!(r->method & NGX_HTTP_GET))
-        return NGX_HTTP_NOT_ALLOWED;
+    //if (!(r->method & NGX_HTTP_GET))
+        //return NGX_HTTP_NOT_ALLOWED;
 
     // discard request body, since we don't need it here 
-    if(ngx_http_discard_request_body(r) != NGX_OK)
-        return NGX_HTTP_INTERNAL_SERVER_ERROR;
-            
-    if(redis4nginx_interate_directives(r, &loc_conf->directives, redis4nginx_process_directive) != NGX_OK)
-        return NGX_ERROR;
+    //if(ngx_http_discard_request_body(r) != NGX_OK)
+        //return NGX_HTTP_INTERNAL_SERVER_ERROR;
+         
+    
+    //ngx_http_read_client_request_body(r, NULL);
+    
+    if(directive_count > 0) 
+    {
+        for (i = 0; i <= directive_count - 1; i++)
+        {
+            if(redis4nginx_process_directive(r, &directive[i]) != NGX_OK)
+                return NGX_HTTP_INTERNAL_SERVER_ERROR;
+        }
+    }
 
     r->main->count++;
     return NGX_DONE; 

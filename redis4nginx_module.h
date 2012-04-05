@@ -55,7 +55,6 @@ void redis4nginx_send_redis_reply(ngx_http_request_t *r, redisAsyncContext *c, r
 // Compute sha1 hash
 void redis4nginx_hash_script(ngx_str_t *digest, ngx_str_t *script);
 char * ngx_string_to_c_string(ngx_str_t *str, ngx_pool_t *pool);
-ngx_int_t redis4nginx_interate_directives(ngx_http_request_t *r, ngx_array_t *directives, redis_4nginx_process_directive directive);
 ngx_int_t redis4nginx_get_directive_argument_value(ngx_http_request_t *r, redis4nginx_directive_arg_t *arg, ngx_str_t* out);
 char * redis4nginx_compile_directive_arguments(ngx_conf_t *cf, redis4nginx_loc_conf_t * loc_conf, redis4nginx_srv_conf_t *srv_conf, redis4nginx_directive_t *directive);
 ngx_int_t redis4nginx_copy_str(ngx_str_t *dest, ngx_str_t *src, size_t offset, size_t len, ngx_pool_t *pool);

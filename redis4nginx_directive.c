@@ -7,26 +7,6 @@
 
 static ngx_str_t  evalsha_command_name = ngx_string("evalsha");
 
-ngx_int_t redis4nginx_interate_directives(ngx_http_request_t *r, ngx_array_t *directives, redis_4nginx_process_directive process)
-{
-    redis4nginx_directive_t *directive;
-    ngx_uint_t i, directive_count;
-    
-    directive = directives->elts;
-    directive_count = directives->nelts;
-    
-    if(directive_count > 0) 
-    {
-        for (i = 0; i <= directive_count - 1; i++)
-        {
-            if(process(r, &directive[i]) != NGX_OK)
-                return NGX_ERROR;
-        }
-    }
-    
-    return NGX_OK;
-}
-
 char *redis4nginx_add_directive_argument(ngx_conf_t *cf, redis4nginx_directive_t *directive, ngx_str_t *raw_arg)
 {
     ngx_http_compile_complex_value_t    ccv;

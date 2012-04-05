@@ -118,7 +118,7 @@ static char *redis4nginx_exec_handler_init(ngx_conf_t *cf, ngx_command_t *cmd, v
     redis4nginx_loc_conf_t *loc_conf = conf;
 
     redis4nginx_directive_t *directive = ngx_array_push(&loc_conf->directives);
-    directive->final = 0;
+    directive->finalize = 0;
     
     return redis4nginx_compile_directive_arguments(cf, loc_conf, redis4nginx_srv_conf, directive);
 }
@@ -136,7 +136,7 @@ static char *redis4nginx_exec_return_handler_init(ngx_conf_t *cf, ngx_command_t 
     }
     
     directive = ngx_array_push(&loc_conf->directives);
-    directive->final = 1;
+    directive->finalize = 1;
             
     return redis4nginx_compile_directive_arguments(cf, loc_conf, redis4nginx_srv_conf, directive);
 }
