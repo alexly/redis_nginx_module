@@ -1,6 +1,7 @@
 ngx_addon_name=redis4nginx_module
 HTTP_MODULES="$HTTP_MODULES redis4nginx_module"
 NGX_ADDON_SRCS="$NGX_ADDON_SRCS $ngx_addon_dir/redis4nginx_adapter.c 
+                $ngx_addon_dir/redis4nginx_json_adapter.c 
                 $ngx_addon_dir/redis4nginx_module.c 
                 $ngx_addon_dir/redis4nginx_utils.c 
                 $ngx_addon_dir/redis4nginx_handler.c 

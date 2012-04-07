@@ -32,6 +32,7 @@ static void redis4nginx_cleanup(void *privdata);
 
 ngx_int_t redis4nginx_init_connection(redis4nginx_srv_conf_t *serv_conf)
 {    
+    //TODO: connection timeout shoul be added by ngx_add_timer or native hiredis
     ngx_uint_t i;
     ngx_str_t *script;
     

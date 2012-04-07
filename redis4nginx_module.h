@@ -15,8 +15,10 @@
 extern ngx_module_t redis4nginx_module;
 
 typedef struct {
-    ngx_array_t arguments;          // arguments for redis_exec
-    unsigned finalize:1;            // 1 - returns reply, 0 - only exec redis command
+    ngx_array_t arguments_metadata; // metadata for redis arguments
+    unsigned finalize:1;            // 1 - finalize request, 0 - only exec redis command
+    char **raw_redis_argvs;
+    size_t *raw_redis_argv_lens;
 } redis4nginx_directive_t;
 
 typedef struct {
@@ -60,4 +62,6 @@ ngx_int_t redis4nginx_get_directive_argument_value(ngx_http_request_t *r, redis4
 char * redis4nginx_compile_directive_arguments(ngx_conf_t *cf, redis4nginx_loc_conf_t * loc_conf, redis4nginx_srv_conf_t *srv_conf, redis4nginx_directive_t *directive);
 ngx_int_t redis4nginx_copy_str(ngx_str_t *dest, ngx_str_t *src, size_t offset, size_t len, ngx_pool_t *pool);
 
+ngx_int_t redis4nginx_parse_json(u_char* jsonText, size_t jsonTextLen);
+        
 #endif

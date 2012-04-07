@@ -29,31 +29,34 @@ void redis4nginx_exec_return_callback(redisAsyncContext *c, void *repl, void *pr
 
 ngx_int_t redis4nginx_process_directive(ngx_http_request_t *r, redis4nginx_directive_t *directive)
 {
+    redis4nginx_ctx *ctx;
     ngx_uint_t i;
     redis4nginx_directive_arg_t *directive_arg;
     ngx_str_t value;
-    char **argvs;
-    size_t *argv_lens;
     
-    directive_arg = directive->arguments.elts;
-    argvs = ngx_palloc(r->pool, sizeof(const char *) * (directive->arguments.nelts));
-    argv_lens = ngx_palloc(r->pool, sizeof(size_t) * (directive->arguments.nelts));
+    ctx = ngx_http_get_module_ctx(r, redis4nginx_module);
+    
+    if(ctx->wait_read_body)
+        redis4nginx_parse_json(r->request_body->buf->pos, r->request_body->buf->last - r->request_body->buf->pos);
+    
+    directive_arg = directive->arguments_metadata.elts;
         
-    if(directive->arguments.nelts > 0)
+    if(directive->arguments_metadata.nelts > 0)
     {
-        for (i = 0; i <= directive->arguments.nelts - 1; i++)
+        for (i = 0; i <= directive->arguments_metadata.nelts - 1; i++)
         {
             
             if(redis4nginx_get_directive_argument_value(r, &directive_arg[i], &value) != NGX_OK)
                 return NGX_ERROR;
 
-            argvs[i] = (char *)value.data;
-            argv_lens[i] = value.len;
+            directive->raw_redis_argvs[i] = (char *)value.data;
+            directive->raw_redis_argv_lens[i] = value.len;
         }
     }
     
     if(redis4nginx_async_command_argv(directive->finalize ?  redis4nginx_exec_return_callback : NULL, 
-                                    r,  directive->arguments.nelts, argvs, argv_lens) != NGX_OK)
+                                    r,  directive->arguments_metadata.nelts, 
+                                    directive->raw_redis_argvs, directive->raw_redis_argv_lens) != NGX_OK)
     {
         return NGX_ERROR;
     }

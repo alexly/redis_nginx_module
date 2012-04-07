@@ -10,7 +10,7 @@ static ngx_str_t  evalsha_command_name = ngx_string("evalsha");
 char *redis4nginx_add_directive_argument(ngx_conf_t *cf, redis4nginx_directive_t *directive, ngx_str_t *raw_arg)
 {
     ngx_http_compile_complex_value_t    ccv;
-    redis4nginx_directive_arg_t         *directive_arg = ngx_array_push(&directive->arguments);
+    redis4nginx_directive_arg_t         *directive_arg = ngx_array_push(&directive->arguments_metadata);
     
     switch(raw_arg->data[0])
     {
@@ -51,7 +51,10 @@ char *redis4nginx_compile_directive_arguments(ngx_conf_t *cf, redis4nginx_loc_co
     
     value = cf->args->elts;
     
-    if(ngx_array_init(&directive->arguments, cf->pool, cf->args->nelts - 1,  sizeof(redis4nginx_directive_arg_t)) != NGX_OK) {
+    directive->raw_redis_argvs = ngx_palloc(cf->pool, sizeof(const char *) * (cf->args->nelts - 1));
+    directive->raw_redis_argv_lens = ngx_palloc(cf->pool, sizeof(size_t) * (cf->args->nelts - 1));
+    
+    if(ngx_array_init(&directive->arguments_metadata, cf->pool, cf->args->nelts - 1,  sizeof(redis4nginx_directive_arg_t)) != NGX_OK) {
         return NGX_CONF_ERROR;
     }
     
