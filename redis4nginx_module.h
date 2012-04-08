@@ -13,14 +13,8 @@
 #include <ngx_core.h>
 #include <ngx_http.h>
 
-//#define USE_NGX_HASH_TABLE
-
-#ifdef USE_NGX_HASH_TABLE
 typedef ngx_hash_t redis4nginx_dict_t;
-#else
-extern dictType derective_arg_callback_dict;
-typedef dict redis4nginx_dict_t;
-#endif
+
 extern ngx_module_t redis4nginx_module;
 
 typedef struct {

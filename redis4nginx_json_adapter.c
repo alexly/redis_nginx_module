@@ -18,7 +18,11 @@ struct {
     size_t                  *lens;
     unsigned                key_found:1;
     ngx_uint_t              value_index;
+    unsigned                array_json:1;
 } parser_ctx;
+
+// config generator
+static yajl_gen g = NULL;
 
 void redis4nginx_set_json_field(const char * s, size_t l)
 {
@@ -60,7 +64,6 @@ static int reformat_string(void * ctx, const unsigned char * string_val, size_t 
 
 static int reformat_map_key(void * ctx, const unsigned char * string_val, size_t len)
 {
-#ifdef USE_NGX_HASH_TABLE
     ngx_uint_t          hash_key;
     ngx_uint_t*         find;
     hash_key    =       ngx_hash_strlow((u_char*)string_val, (u_char*)string_val, len);
@@ -71,21 +74,6 @@ static int reformat_map_key(void * ctx, const unsigned char * string_val, size_t
         parser_ctx.value_index = *find;
         parser_ctx.key_found = 1;
     }
-#else
-    dictEntry *find;
-    ngx_str_t key;
-    ngx_uint_t *field_index;
-    key.data = (u_char*)string_val;
-    key.len = len;
-    
-    find = dictFind(parser_ctx.json_fields_hash, &key);
-    
-    if(find != NULL) {
-        field_index = (ngx_uint_t*)dictGetEntryVal(find);
-        parser_ctx.value_index = *field_index;
-        parser_ctx.key_found = 1;
-    }   
-#endif
 
     return 1;
 }
@@ -128,21 +116,21 @@ yajl_callbacks callbacks = {
     reformat_start_array,
     reformat_end_array
 };
-    
+   
 ngx_int_t 
 redis4nginx_proces_json_fields(u_char* jsonText, size_t jsonTextLen, 
         redis4nginx_dict_t *json_fields_hash, char **argvs, size_t *lens)
 {
     yajl_handle hand;
-    // generator config
-    yajl_gen g;
     yajl_status stat;
-     
+    
+    if(g == NULL)
+        g = yajl_gen_alloc(NULL);
+    
     parser_ctx.argvs = argvs;
     parser_ctx.lens = lens;
     parser_ctx.json_fields_hash = json_fields_hash;
     
-    g = yajl_gen_alloc(NULL);
     yajl_gen_config(g, yajl_gen_beautify, 1);
     yajl_gen_config(g, yajl_gen_validate_utf8, 1);
 

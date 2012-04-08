@@ -34,12 +34,11 @@ redis4nginx_add_directive_argument(ngx_conf_t *cf, redis4nginx_directive_t *dire
             
         case '@': // json field(from request body)
             
-        directive_arg->type = REDIS4NGINX_JSON_FIELD_ARG;
-        dict_value = ngx_palloc(cf->pool, sizeof(ngx_uint_t));
-        *((int*)dict_value) = index;    
-        redis4nginx_copy_str(&directive_arg->string_value,  raw_arg, 1, raw_arg->len - 1, cf->pool);
+            directive_arg->type = REDIS4NGINX_JSON_FIELD_ARG;
+            dict_value = ngx_palloc(cf->pool, sizeof(ngx_uint_t));
+            *((int*)dict_value) = index;    
+            redis4nginx_copy_str(&directive_arg->string_value,  raw_arg, 1, raw_arg->len - 1, cf->pool);
             
-#ifdef USE_NGX_HASH_TABLE
             // prepare hash table
             if(directive->hash_elements == NULL) {
                 directive->hash_elements = ngx_palloc(cf->pool, sizeof(ngx_hash_keys_arrays_t));
@@ -60,14 +59,7 @@ redis4nginx_add_directive_argument(ngx_conf_t *cf, redis4nginx_directive_t *dire
             {
                 return NGX_CONF_ERROR;
             }
-
-#else
-            if(directive->json_fields_hash == NULL)
-                directive->json_fields_hash = dictCreate(&derective_arg_callback_dict, NULL);   
-            
-            dictAdd(directive->json_fields_hash, &directive_arg->string_value, dict_value);
-#endif
-                    
+               
             break;
 
         default:
@@ -80,7 +72,6 @@ redis4nginx_add_directive_argument(ngx_conf_t *cf, redis4nginx_directive_t *dire
     return NGX_CONF_OK;
 }
 
-#ifdef USE_NGX_HASH_TABLE
 static char *
 redis4nginx_finalize_compile_directive(ngx_conf_t *cf, redis4nginx_directive_t *directive)
 {
@@ -108,7 +99,6 @@ redis4nginx_finalize_compile_directive(ngx_conf_t *cf, redis4nginx_directive_t *
     
     return NGX_CONF_OK;
 }
-#endif
 
 char *
 redis4nginx_compile_directive(ngx_conf_t *cf, redis4nginx_loc_conf_t * loc_conf, 
@@ -151,10 +141,7 @@ redis4nginx_compile_directive(ngx_conf_t *cf, redis4nginx_loc_conf_t * loc_conf,
         if(redis4nginx_add_directive_argument(cf, directive, &value[i], i-1) != NGX_CONF_OK)
             return NGX_CONF_ERROR;
     
-#ifdef USE_NGX_HASH_TABLE
     return redis4nginx_finalize_compile_directive(cf, directive);
-#endif
-    return NGX_CONF_OK;
 }
 
 ngx_int_t 
@@ -166,8 +153,11 @@ redis4nginx_get_directive_argument_value(ngx_http_request_t *r,
     switch(arg->type)
     {
         case REDIS4NGINX_JSON_FIELD_ARG:
-            *out = "nil";
-            *len = 3;
+            if(*len <=0) {
+                *out = "nil";
+                *len = 3;
+            }
+            
             break;
         case REDIS4NGINX_COMPILIED_ARG:
             if (ngx_http_complex_value(r, arg->compilied, &value) != NGX_OK)
@@ -184,45 +174,3 @@ redis4nginx_get_directive_argument_value(ngx_http_request_t *r,
     
     return NGX_OK;
 }
-
-#ifndef USE_NGX_HASH_TABLE
-static unsigned int callbackHash(const void *key) {
-    ngx_str_t *str_key = (ngx_str_t *)key;
-    return dictGenHashFunction(str_key->data,str_key->len);
-}
-
-static void *callbackValDup(void *privdata, const void *src) {
-    ((void) privdata);
-    redisCallback *dup = malloc(sizeof(*dup));
-    memcpy(dup,src,sizeof(*dup));
-    return dup;
-}
-
-static int callbackKeyCompare(void *privdata, const void *key1, const void *key2) {
-    ngx_str_t *str_key1 = (ngx_str_t *)key1;
-    ngx_str_t *str_key2 = (ngx_str_t *)key2;
-
-    if (str_key1->len != str_key2->len) return 0;
-    
-    return ngx_strncmp(str_key1->data, str_key2->data, str_key1->len) == 0;
-}
-
-static void callbackKeyDestructor(void *privdata, void *key) {
-    //((void) privdata);
-    //sdsfree((sds)key);
-}
-
-static void callbackValDestructor(void *privdata, void *val) {
-    //((void) privdata);
-    //free(val);
-}
-
-dictType derective_arg_callback_dict = {
-    callbackHash,
-    NULL,
-    callbackValDup,
-    callbackKeyCompare,
-    callbackKeyDestructor,
-    callbackValDestructor
-};
-#endif
