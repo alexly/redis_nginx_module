@@ -1,5 +1,21 @@
-#ifndef __REDIS4NGINX_MODULE__
-#define __REDIS4NGINX_MODULE__
+/*
+ * Copyright (c) 2011-2012, Alexander Lyalin <alexandr.lyalin@gmail.com>
+ *
+ * Permission to use, copy, modify, and/or distribute this software for any
+ * purpose with or without fee is hereby granted, provided that the above
+ * copyright notice and this permission notice appear in all copies.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+ * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+ * MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+ * ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+ * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+ * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+ * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+ */
+
+#ifndef _REDIS_4_NGINX_MODULE_INCLUDED_
+#define _REDIS_4_NGINX_MODULE_INCLUDED_
 
 #define REDIS4NGINX_JSON_FIELD_ARG      0
 #define REDIS4NGINX_COMPILIED_ARG       1
@@ -50,7 +66,7 @@ typedef struct {
     unsigned                        wait_read_body:1;
 } ngx_http_r4x_request_ctx;
 
-// Redis DB API
+// Redis DB API:
 ngx_int_t
 ngx_http_r4x_init_connection(ngx_http_r4x_srv_conf_t *serv_conf);
 
@@ -61,12 +77,12 @@ ngx_int_t
 ngx_http_r4x_async_command_argv(redisCallbackFn *fn, void *privdata, 
                             int argc, char **argv, const size_t *argvlen);
 
-// HTTP utilities
+// HTTP utilities:
 void
 ngx_http_r4x_send_redis_reply(ngx_http_request_t *r, redisAsyncContext *c, 
                             redisReply *reply);
 
-// Directive utilities
+// Directive utilities:
 ngx_int_t
 ngx_http_r4x_get_directive_argument_value(ngx_http_request_t *r, 
         ngx_http_r4x_directive_arg_t *arg, char **value, size_t *len);
@@ -75,12 +91,12 @@ char *
 ngx_http_r4x_compile_directive(ngx_conf_t *cf, ngx_http_r4x_loc_conf_t * loc_conf, 
         ngx_http_r4x_srv_conf_t *srv_conf, ngx_http_r4x_directive_t *directive);
 
-// Json
+// Json utilities:
 ngx_int_t
 ngx_http_r4x_proces_json_fields(u_char* jsonText, size_t jsonTextLen, 
         ngx_hash_t *json_fields_hash, char **argvs, size_t *lens);
         
-// String utilities
+// String utilities:
 void
 ngx_http_r4x_hash_script(ngx_str_t *digest, ngx_str_t *script);
 

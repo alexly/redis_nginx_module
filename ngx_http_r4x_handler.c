@@ -1,3 +1,19 @@
+/*
+ * Copyright (c) 2011-2012, Alexander Lyalin <alexandr.lyalin@gmail.com>
+ *
+ * Permission to use, copy, modify, and/or distribute this software for any
+ * purpose with or without fee is hereby granted, provided that the above
+ * copyright notice and this permission notice appear in all copies.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+ * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+ * MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+ * ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+ * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+ * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+ * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+ */
+
 #ifndef DDEBUG
 #define DDEBUG 0
 #endif
@@ -32,6 +48,7 @@ static ngx_int_t
 ngx_http_r4x_process_directive(ngx_http_request_t *r, ngx_http_r4x_directive_t *directive)
 {
     ngx_uint_t i;
+    ngx_int_t rc;
     ngx_http_r4x_directive_arg_t *directive_arg;
     
     directive_arg = directive->arguments_metadata.elts;
@@ -48,13 +65,18 @@ ngx_http_r4x_process_directive(ngx_http_request_t *r, ngx_http_r4x_directive_t *
         
         if(directive->json_fields_hash != NULL && r->request_body != NULL) {
             
-            if(ngx_http_r4x_proces_json_fields(r->request_body->buf->pos, 
+            rc = ngx_http_r4x_proces_json_fields(r->request_body->buf->pos, 
                     r->request_body->buf->last - r->request_body->buf->pos, 
                     directive->json_fields_hash, 
-                    directive->raw_redis_argvs, directive->raw_redis_argv_lens) != NGX_OK)
+                    directive->raw_redis_argvs, directive->raw_redis_argv_lens);
+                    
+            if(rc == NGX_AGAIN)
             {
-                return NGX_ERROR;
+                // Process array
             }
+            else if(rc != NGX_OK)
+                return NGX_HTTP_INTERNAL_SERVER_ERROR;
+            
         }
     }
     
