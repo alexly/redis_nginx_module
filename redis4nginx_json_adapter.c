@@ -12,61 +12,107 @@
 #include <stdlib.h>
 #include <string.h>
 
+struct {
+    redis4nginx_dict_t      *json_fields_hash;
+    char                    **argvs;
+    size_t                  *lens;
+    unsigned                key_found:1;
+    ngx_uint_t              value_index;
+} parser_ctx;
+
+void redis4nginx_set_json_field(const char * s, size_t l)
+{
+    parser_ctx.argvs[parser_ctx.value_index] = (char*)s;
+    parser_ctx.lens[parser_ctx.value_index] = l;
+    parser_ctx.key_found = 0;
+}
+
 static int reformat_null(void * ctx)
 {
-    yajl_gen g = (yajl_gen) ctx;
-    return yajl_gen_status_ok == yajl_gen_null(g);
+    return 1;
 }
 
 static int reformat_boolean(void * ctx, int boolean)
 {
-    yajl_gen g = (yajl_gen) ctx;
-    return yajl_gen_status_ok == yajl_gen_bool(g, boolean);
+    const char * val = boolean ? "true" : "false";
+    
+    if(parser_ctx.key_found) {
+        redis4nginx_set_json_field(val, sizeof(val));
+    }
+    return 1;
 }
 
-static int reformat_number(void * ctx, const char * s, size_t l)
+static int reformat_number(void * ctx, const char * val, size_t len)
 {
-    yajl_gen g = (yajl_gen) ctx;
-    return yajl_gen_status_ok == yajl_gen_number(g, s, l);
+    if(parser_ctx.key_found) {
+        redis4nginx_set_json_field(val, len);
+    }
+    return 1;
 }
 
-static int reformat_string(void * ctx, const unsigned char * stringVal,
-                           size_t stringLen)
+static int reformat_string(void * ctx, const unsigned char * string_val, size_t len)
 {
-    yajl_gen g = (yajl_gen) ctx;
-    return yajl_gen_status_ok == yajl_gen_string(g, stringVal, stringLen);
+    if(parser_ctx.key_found) {
+        redis4nginx_set_json_field((const char*)string_val, len);
+    }
+    return 1;
 }
 
-static int reformat_map_key(void * ctx, const unsigned char * stringVal,
-                            size_t stringLen)
+static int reformat_map_key(void * ctx, const unsigned char * string_val, size_t len)
 {
-    yajl_gen g = (yajl_gen) ctx;
-    return yajl_gen_status_ok == yajl_gen_string(g, stringVal, stringLen);
+#ifdef USE_NGX_HASH_TABLE
+    ngx_uint_t          hash_key;
+    ngx_uint_t*         find;
+    hash_key    =       ngx_hash_strlow((u_char*)string_val, (u_char*)string_val, len);
+    
+    find = (ngx_uint_t*) ngx_hash_find(parser_ctx.json_fields_hash,  hash_key, (u_char*) string_val, len);
+    
+    if(find) {
+        parser_ctx.value_index = *find;
+        parser_ctx.key_found = 1;
+    }
+#else
+    dictEntry *find;
+    ngx_str_t key;
+    ngx_uint_t *field_index;
+    key.data = (u_char*)string_val;
+    key.len = len;
+    
+    find = dictFind(parser_ctx.json_fields_hash, &key);
+    
+    if(find != NULL) {
+        field_index = (ngx_uint_t*)dictGetEntryVal(find);
+        parser_ctx.value_index = *field_index;
+        parser_ctx.key_found = 1;
+    }   
+#endif
+
+    return 1;
 }
 
 static int reformat_start_map(void * ctx)
 {
-    yajl_gen g = (yajl_gen) ctx;
-    return yajl_gen_status_ok == yajl_gen_map_open(g);
+    //yajl_gen g = (yajl_gen) ctx;
+    return 1;//yajl_gen_status_ok == yajl_gen_map_open(g);
 }
 
 
 static int reformat_end_map(void * ctx)
 {
-    yajl_gen g = (yajl_gen) ctx;
-    return yajl_gen_status_ok == yajl_gen_map_close(g);
+    //yajl_gen g = (yajl_gen) ctx;
+    return 1;//yajl_gen_status_ok == yajl_gen_map_close(g);
 }
 
 static int reformat_start_array(void * ctx)
 {
-    yajl_gen g = (yajl_gen) ctx;
-    return yajl_gen_status_ok == yajl_gen_array_open(g);
+    //yajl_gen g = (yajl_gen) ctx;
+    return 1;//yajl_gen_status_ok == yajl_gen_array_open(g);
 }
 
 static int reformat_end_array(void * ctx)
 {
-    yajl_gen g = (yajl_gen) ctx;
-    return yajl_gen_status_ok == yajl_gen_array_close(g);
+    //yajl_gen g = (yajl_gen) ctx;
+    return 1;//yajl_gen_status_ok == yajl_gen_array_close(g);
 }
 
 yajl_callbacks callbacks = {
@@ -82,15 +128,20 @@ yajl_callbacks callbacks = {
     reformat_start_array,
     reformat_end_array
 };
-
-ngx_int_t redis4nginx_parse_json(u_char* jsonText, size_t jsonTextLen)
+    
+ngx_int_t 
+redis4nginx_proces_json_fields(u_char* jsonText, size_t jsonTextLen, 
+        redis4nginx_dict_t *json_fields_hash, char **argvs, size_t *lens)
 {
     yajl_handle hand;
     // generator config
     yajl_gen g;
     yajl_status stat;
-    //unsigned char * str;
      
+    parser_ctx.argvs = argvs;
+    parser_ctx.lens = lens;
+    parser_ctx.json_fields_hash = json_fields_hash;
+    
     g = yajl_gen_alloc(NULL);
     yajl_gen_config(g, yajl_gen_beautify, 1);
     yajl_gen_config(g, yajl_gen_validate_utf8, 1);

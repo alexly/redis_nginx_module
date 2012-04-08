@@ -5,7 +5,8 @@
 #include "ddebug.h"
 #include "redis4nginx_module.h"
 
-void redis4nginx_exec_return_callback(redisAsyncContext *c, void *repl, void *privdata)
+void 
+redis4nginx_exec_return_callback(redisAsyncContext *c, void *repl, void *privdata)
 {
     redis4nginx_ctx *ctx;
     ngx_http_request_t *r = privdata;
@@ -27,17 +28,11 @@ void redis4nginx_exec_return_callback(redisAsyncContext *c, void *repl, void *pr
     }
 }
 
-ngx_int_t redis4nginx_process_directive(ngx_http_request_t *r, redis4nginx_directive_t *directive)
+ngx_int_t 
+redis4nginx_process_directive(ngx_http_request_t *r, redis4nginx_directive_t *directive)
 {
-    redis4nginx_ctx *ctx;
     ngx_uint_t i;
     redis4nginx_directive_arg_t *directive_arg;
-    ngx_str_t value;
-    
-    ctx = ngx_http_get_module_ctx(r, redis4nginx_module);
-    
-    if(ctx->wait_read_body)
-        redis4nginx_parse_json(r->request_body->buf->pos, r->request_body->buf->last - r->request_body->buf->pos);
     
     directive_arg = directive->arguments_metadata.elts;
         
@@ -46,11 +41,20 @@ ngx_int_t redis4nginx_process_directive(ngx_http_request_t *r, redis4nginx_direc
         for (i = 0; i <= directive->arguments_metadata.nelts - 1; i++)
         {
             
-            if(redis4nginx_get_directive_argument_value(r, &directive_arg[i], &value) != NGX_OK)
+            if(redis4nginx_get_directive_argument_value(r, &directive_arg[i], 
+                    &directive->raw_redis_argvs[i], &directive->raw_redis_argv_lens[i]) != NGX_OK)
                 return NGX_ERROR;
-
-            directive->raw_redis_argvs[i] = (char *)value.data;
-            directive->raw_redis_argv_lens[i] = value.len;
+        }
+        
+        if(directive->json_fields_hash != NULL && r->request_body != NULL) {
+            
+            if(redis4nginx_proces_json_fields(r->request_body->buf->pos, 
+                    r->request_body->buf->last - r->request_body->buf->pos, 
+                    directive->json_fields_hash, 
+                    directive->raw_redis_argvs, directive->raw_redis_argv_lens) != NGX_OK)
+            {
+                return NGX_ERROR;
+            }
         }
     }
     
@@ -91,7 +95,8 @@ redis4nginx_run_directives(ngx_http_request_t *r)
     r->main->count++;
 }
 
-ngx_int_t redis4nginx_exec_handler(ngx_http_request_t *r)
+ngx_int_t 
+redis4nginx_exec_handler(ngx_http_request_t *r)
 {
     redis4nginx_ctx *ctx = ngx_http_get_module_ctx(r, redis4nginx_module);
     ngx_int_t rc;

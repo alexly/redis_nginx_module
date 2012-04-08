@@ -7,16 +7,20 @@
 
 static ngx_str_t  evalsha_command_name = ngx_string("evalsha");
 
-char *redis4nginx_add_directive_argument(ngx_conf_t *cf, redis4nginx_directive_t *directive, ngx_str_t *raw_arg)
+static char *
+redis4nginx_add_directive_argument(ngx_conf_t *cf, redis4nginx_directive_t *directive, 
+        ngx_str_t *raw_arg, ngx_uint_t index)
 {
     ngx_http_compile_complex_value_t    ccv;
     redis4nginx_directive_arg_t         *directive_arg = ngx_array_push(&directive->arguments_metadata);
+    ngx_uint_t                          *dict_value;
     
     switch(raw_arg->data[0])
     {
         case '$': // nginx variable            
             directive_arg->type = REDIS4NGINX_COMPILIED_ARG;
-            directive_arg->compilied = ngx_palloc(cf->pool, sizeof(ngx_http_complex_value_t));
+            directive_arg->compilied = ngx_palloc(cf->pool, 
+                    sizeof(ngx_http_complex_value_t));
 
             ngx_memzero(&ccv, sizeof(ngx_http_compile_complex_value_t));
 
@@ -27,23 +31,88 @@ char *redis4nginx_add_directive_argument(ngx_conf_t *cf, redis4nginx_directive_t
             if (ngx_http_compile_complex_value(&ccv) != NGX_OK)
                 return NGX_CONF_ERROR;
             break;
+            
         case '@': // json field(from request body)
-        {
-            directive_arg->type = REDIS4NGINX_JSON_FIELD_ARG;
-            redis4nginx_copy_str(&directive_arg->string_value, raw_arg, 1, raw_arg->len - 1, cf->pool);
+            
+        directive_arg->type = REDIS4NGINX_JSON_FIELD_ARG;
+        dict_value = ngx_palloc(cf->pool, sizeof(ngx_uint_t));
+        *((int*)dict_value) = index;    
+        redis4nginx_copy_str(&directive_arg->string_value,  raw_arg, 1, raw_arg->len - 1, cf->pool);
+            
+#ifdef USE_NGX_HASH_TABLE
+            // prepare hash table
+            if(directive->hash_elements == NULL) {
+                directive->hash_elements = ngx_palloc(cf->pool, sizeof(ngx_hash_keys_arrays_t));
+                
+                directive->hash_elements = ngx_pcalloc(cf->temp_pool, sizeof(ngx_hash_keys_arrays_t));
+                directive->hash_elements->pool = cf->pool;
+                directive->hash_elements->temp_pool = cf->pool;
+    
+                if (ngx_hash_keys_array_init(directive->hash_elements, NGX_HASH_SMALL)
+                    != NGX_OK)
+                {
+                    return NGX_CONF_ERROR;
+                }
+            }
+            
+            if(ngx_hash_add_key(directive->hash_elements, &directive_arg->string_value, 
+                    dict_value, NGX_HASH_READONLY_KEY) != NGX_OK)
+            {
+                return NGX_CONF_ERROR;
+            }
+
+#else
+            if(directive->json_fields_hash == NULL)
+                directive->json_fields_hash = dictCreate(&derective_arg_callback_dict, NULL);   
+            
+            dictAdd(directive->json_fields_hash, &directive_arg->string_value, dict_value);
+#endif
+                    
             break;
-        }
+
         default:
             directive_arg->type = REDIS4NGINX_STRING_ARG;
-            redis4nginx_copy_str(&directive_arg->string_value, raw_arg, 0, raw_arg->len, cf->pool);
+            redis4nginx_copy_str(&directive_arg->string_value, 
+                    raw_arg, 0, raw_arg->len, cf->pool);
             break;
     };
  
     return NGX_CONF_OK;
 }
 
-char *redis4nginx_compile_directive_arguments(ngx_conf_t *cf, redis4nginx_loc_conf_t * loc_conf, 
-                        redis4nginx_srv_conf_t *srv_conf, redis4nginx_directive_t *directive)
+#ifdef USE_NGX_HASH_TABLE
+static char *
+redis4nginx_finalize_compile_directive(ngx_conf_t *cf, redis4nginx_directive_t *directive)
+{
+    ngx_hash_init_t     hash_init;
+    ngx_hash_t*         hash;
+    
+    if(directive->hash_elements != NULL) {
+        hash                    = (ngx_hash_t*) ngx_pcalloc(cf->pool, sizeof(ngx_hash_t));
+        hash_init.hash          = hash;
+        hash_init.key           = ngx_hash_key; 
+        hash_init.max_size      = 1024*10;
+        hash_init.bucket_size   = ngx_align(64, ngx_cacheline_size);
+        hash_init.name          = "json_fields_json";
+        hash_init.pool          = cf->pool;
+        hash_init.temp_pool     = NULL;
+        
+        if (ngx_hash_init(&hash_init, (ngx_hash_key_t*) directive->hash_elements->keys.elts, 
+                directive->hash_elements->keys.nelts)!=NGX_OK){
+            return NGX_CONF_ERROR;
+        }
+        
+        //TODO: free directive->hash_elements
+        directive->json_fields_hash = hash;
+    }
+    
+    return NGX_CONF_OK;
+}
+#endif
+
+char *
+redis4nginx_compile_directive(ngx_conf_t *cf, redis4nginx_loc_conf_t * loc_conf, 
+        redis4nginx_srv_conf_t *srv_conf, redis4nginx_directive_t *directive)
 {
     ngx_str_t                          *value, *script, hash;
     ngx_uint_t                          i;
@@ -54,7 +123,8 @@ char *redis4nginx_compile_directive_arguments(ngx_conf_t *cf, redis4nginx_loc_co
     directive->raw_redis_argvs = ngx_palloc(cf->pool, sizeof(const char *) * (cf->args->nelts - 1));
     directive->raw_redis_argv_lens = ngx_palloc(cf->pool, sizeof(size_t) * (cf->args->nelts - 1));
     
-    if(ngx_array_init(&directive->arguments_metadata, cf->pool, cf->args->nelts - 1,  sizeof(redis4nginx_directive_arg_t)) != NGX_OK) {
+    if(ngx_array_init(&directive->arguments_metadata, 
+            cf->pool, cf->args->nelts - 1,  sizeof(redis4nginx_directive_arg_t)) != NGX_OK) {
         return NGX_CONF_ERROR;
     }
     
@@ -66,9 +136,9 @@ char *redis4nginx_compile_directive_arguments(ngx_conf_t *cf, redis4nginx_loc_co
         redis4nginx_hash_script(&hash, &value[2]);
         
         // evalsha command
-        redis4nginx_add_directive_argument(cf, directive, &evalsha_command_name);
+        redis4nginx_add_directive_argument(cf, directive, &evalsha_command_name, 0);
         // sha1 script
-        redis4nginx_add_directive_argument(cf, directive, &hash);
+        redis4nginx_add_directive_argument(cf, directive, &hash, 1);
                 
         if(srv_conf->startup_scripts == NULL)
             srv_conf->startup_scripts = ngx_array_create(cf->pool, 10, sizeof(ngx_str_t));
@@ -78,28 +148,81 @@ char *redis4nginx_compile_directive_arguments(ngx_conf_t *cf, redis4nginx_loc_co
     }
     
     for (i = skip_args; i < cf->args->nelts; i++)
-        if(redis4nginx_add_directive_argument(cf, directive, &value[i]) != NGX_CONF_OK)
+        if(redis4nginx_add_directive_argument(cf, directive, &value[i], i-1) != NGX_CONF_OK)
             return NGX_CONF_ERROR;
     
+#ifdef USE_NGX_HASH_TABLE
+    return redis4nginx_finalize_compile_directive(cf, directive);
+#endif
     return NGX_CONF_OK;
 }
 
-ngx_int_t redis4nginx_get_directive_argument_value(ngx_http_request_t *r, redis4nginx_directive_arg_t *arg, ngx_str_t* out)
+ngx_int_t 
+redis4nginx_get_directive_argument_value(ngx_http_request_t *r, 
+        redis4nginx_directive_arg_t *arg, char **out, size_t *len)
 {
+    ngx_str_t value;
+    
     switch(arg->type)
     {
         case REDIS4NGINX_JSON_FIELD_ARG:
-            return NGX_ERROR;//todo: fix
+            *out = "nil";
+            *len = 3;
             break;
         case REDIS4NGINX_COMPILIED_ARG:
-            if (ngx_http_complex_value(r, arg->compilied, out) != NGX_OK)
+            if (ngx_http_complex_value(r, arg->compilied, &value) != NGX_OK)
                 return NGX_ERROR;
+            
+            *out = (char*)value.data;
+            *len = value.len;
             break;
         case REDIS4NGINX_STRING_ARG:
-            out->data = arg->string_value.data;
-            out->len = arg->string_value.len;
+            *out = (char*)arg->string_value.data;
+            *len = arg->string_value.len;
             break;
     };
     
     return NGX_OK;
 }
+
+#ifndef USE_NGX_HASH_TABLE
+static unsigned int callbackHash(const void *key) {
+    ngx_str_t *str_key = (ngx_str_t *)key;
+    return dictGenHashFunction(str_key->data,str_key->len);
+}
+
+static void *callbackValDup(void *privdata, const void *src) {
+    ((void) privdata);
+    redisCallback *dup = malloc(sizeof(*dup));
+    memcpy(dup,src,sizeof(*dup));
+    return dup;
+}
+
+static int callbackKeyCompare(void *privdata, const void *key1, const void *key2) {
+    ngx_str_t *str_key1 = (ngx_str_t *)key1;
+    ngx_str_t *str_key2 = (ngx_str_t *)key2;
+
+    if (str_key1->len != str_key2->len) return 0;
+    
+    return ngx_strncmp(str_key1->data, str_key2->data, str_key1->len) == 0;
+}
+
+static void callbackKeyDestructor(void *privdata, void *key) {
+    //((void) privdata);
+    //sdsfree((sds)key);
+}
+
+static void callbackValDestructor(void *privdata, void *val) {
+    //((void) privdata);
+    //free(val);
+}
+
+dictType derective_arg_callback_dict = {
+    callbackHash,
+    NULL,
+    callbackValDup,
+    callbackKeyCompare,
+    callbackKeyDestructor,
+    callbackValDestructor
+};
+#endif

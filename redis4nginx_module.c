@@ -12,8 +12,6 @@ static char *redis4nginx_exec_handler_init(ngx_conf_t *cf, ngx_command_t *cmd, v
 static char *redis4nginx_exec_return_handler_init(ngx_conf_t *cf, ngx_command_t *cmd, void *conf);
 ngx_int_t redis4nginx_exec_handler(ngx_http_request_t *r);
 
-static redis4nginx_srv_conf_t *redis4nginx_srv_conf;
-
 static ngx_command_t  redis4nginx_commands[] = {
     {	ngx_string("redis_host"),
         NGX_HTTP_SRV_CONF|NGX_HTTP_MAIN_CONF|NGX_CONF_TAKE1,
@@ -81,11 +79,13 @@ ngx_module_t redis4nginx_module = {
 
 static void* redis4nginx_create_srv_conf(ngx_conf_t *cf)
 {
-    redis4nginx_srv_conf = ngx_pcalloc(cf->pool, sizeof(redis4nginx_srv_conf_t));
+    redis4nginx_srv_conf_t *srv_conf;
+    
+    srv_conf = ngx_pcalloc(cf->pool, sizeof(redis4nginx_srv_conf_t));
 
-    redis4nginx_srv_conf->port = NGX_CONF_UNSET;
+    srv_conf->port = NGX_CONF_UNSET;
 
-    return redis4nginx_srv_conf;
+    return srv_conf;
 }
 
 static char* redis4nginx_merge_srv_conf(ngx_conf_t *cf, void *parent, void *child)
@@ -116,11 +116,15 @@ static void* redis4nginx_create_loc_conf(ngx_conf_t *cf)
 static char *redis4nginx_exec_handler_init(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
 {
     redis4nginx_loc_conf_t *loc_conf = conf;
-
+    redis4nginx_srv_conf_t *srv_conf;
+    
     redis4nginx_directive_t *directive = ngx_array_push(&loc_conf->directives);
     directive->finalize = 0;
+    directive->hash_elements = NULL;
     
-    return redis4nginx_compile_directive_arguments(cf, loc_conf, redis4nginx_srv_conf, directive);
+    srv_conf = ngx_http_conf_get_module_srv_conf(cf, redis4nginx_module);
+    
+    return redis4nginx_compile_directive(cf, loc_conf, srv_conf, directive);
 }
 
 static char *redis4nginx_exec_return_handler_init(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
@@ -128,6 +132,7 @@ static char *redis4nginx_exec_return_handler_init(ngx_conf_t *cf, ngx_command_t 
     redis4nginx_loc_conf_t *loc_conf = conf;
     ngx_http_core_loc_conf_t *core_conf;
     redis4nginx_directive_t *directive;
+    redis4nginx_srv_conf_t *srv_conf;
     
     core_conf = ngx_http_conf_get_module_loc_conf(cf, ngx_http_core_module);
 
@@ -137,7 +142,10 @@ static char *redis4nginx_exec_return_handler_init(ngx_conf_t *cf, ngx_command_t 
     
     directive = ngx_array_push(&loc_conf->directives);
     directive->finalize = 1;
+    directive->hash_elements = NULL;
             
-    return redis4nginx_compile_directive_arguments(cf, loc_conf, redis4nginx_srv_conf, directive);
+    srv_conf = ngx_http_conf_get_module_srv_conf(cf, redis4nginx_module);
+    
+    return redis4nginx_compile_directive(cf, loc_conf, srv_conf, directive);
 }
 

@@ -9,7 +9,8 @@
 static u_char null_value[] = "NULL";
 static u_char array_value[] = "REDIS_REPLY_ARRAY";
 
-static ngx_int_t parse_redis_reply(ngx_http_request_t *r, redisReply *reply, ngx_buf_t *buf) 
+static 
+ngx_int_t parse_redis_reply(ngx_http_request_t *r, redisReply *reply, ngx_buf_t *buf) 
 {
     switch(reply->type)
     {
@@ -46,7 +47,8 @@ static ngx_int_t parse_redis_reply(ngx_http_request_t *r, redisReply *reply, ngx
     return NGX_OK;
 }
 
-void redis4nginx_send_redis_reply(ngx_http_request_t *r, redisAsyncContext *c, redisReply *reply)
+void
+redis4nginx_send_redis_reply(ngx_http_request_t *r, redisAsyncContext *c, redisReply *reply)
 {   
     ngx_int_t    rc;
     ngx_buf_t   *buf;
@@ -114,7 +116,8 @@ void redis4nginx_hash_script(ngx_str_t *digest, ngx_str_t *script) {
     digest->len = 40;
 }
 
-char* ngx_string_to_c_string(ngx_str_t *str, ngx_pool_t *pool)
+char* 
+ngx_string_to_c_string(ngx_str_t *str, ngx_pool_t *pool)
 {
     char* result = NULL;
     if(str != NULL && str->len > 0) 
@@ -127,7 +130,8 @@ char* ngx_string_to_c_string(ngx_str_t *str, ngx_pool_t *pool)
     return result;
 }
 
-ngx_int_t redis4nginx_copy_str(ngx_str_t *dest, ngx_str_t *src, size_t offset, size_t len, ngx_pool_t *pool)
+ngx_int_t 
+redis4nginx_copy_str(ngx_str_t *dest, ngx_str_t *src, size_t offset, size_t len, ngx_pool_t *pool)
 {
     ngx_pool_t *use_pool;
     use_pool = pool == NULL ? ngx_cycle->pool : pool;

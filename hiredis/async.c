@@ -34,7 +34,7 @@
 #include <assert.h>
 #include <ctype.h>
 #include "async.h"
-#include "dict.c"
+#include "dict.h"
 #include "sds.h"
 #include "util.h"
 
