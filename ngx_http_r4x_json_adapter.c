@@ -3,7 +3,7 @@
 #endif
 
 #include "ddebug.h"
-#include "redis4nginx_module.h"
+#include "ngx_http_r4x_module.h"
 
 #include "yajl/yajl_parse.h"
 #include "yajl/yajl_gen.h"
@@ -13,7 +13,7 @@
 #include <string.h>
 
 struct {
-    redis4nginx_dict_t      *json_fields_hash;
+    ngx_hash_t      *json_fields_hash;
     char                    **argvs;
     size_t                  *lens;
     unsigned                key_found:1;
@@ -24,45 +24,45 @@ struct {
 // config generator
 static yajl_gen g = NULL;
 
-void redis4nginx_set_json_field(const char * s, size_t l)
+void ngx_http_r4x_set_json_field(const char * s, size_t l)
 {
     parser_ctx.argvs[parser_ctx.value_index] = (char*)s;
     parser_ctx.lens[parser_ctx.value_index] = l;
     parser_ctx.key_found = 0;
 }
 
-static int reformat_null(void * ctx)
+static int ngx_http_r4x_process_json_null(void * ctx)
 {
     return 1;
 }
 
-static int reformat_boolean(void * ctx, int boolean)
+static int ngx_http_r4x_process__boolean(void * ctx, int boolean)
 {
     const char * val = boolean ? "true" : "false";
     
     if(parser_ctx.key_found) {
-        redis4nginx_set_json_field(val, sizeof(val));
+        ngx_http_r4x_set_json_field(val, sizeof(val));
     }
     return 1;
 }
 
-static int reformat_number(void * ctx, const char * val, size_t len)
+static int ngx_http_r4x_process_number(void * ctx, const char * val, size_t len)
 {
     if(parser_ctx.key_found) {
-        redis4nginx_set_json_field(val, len);
+        ngx_http_r4x_set_json_field(val, len);
     }
     return 1;
 }
 
-static int reformat_string(void * ctx, const unsigned char * string_val, size_t len)
+static int ngx_http_r4x_process_string(void * ctx, const unsigned char * string_val, size_t len)
 {
     if(parser_ctx.key_found) {
-        redis4nginx_set_json_field((const char*)string_val, len);
+        ngx_http_r4x_set_json_field((const char*)string_val, len);
     }
     return 1;
 }
 
-static int reformat_map_key(void * ctx, const unsigned char * string_val, size_t len)
+static int ngx_http_r4x_process_key(void * ctx, const unsigned char * string_val, size_t len)
 {
     ngx_uint_t          hash_key;
     ngx_uint_t*         find;
@@ -78,48 +78,48 @@ static int reformat_map_key(void * ctx, const unsigned char * string_val, size_t
     return 1;
 }
 
-static int reformat_start_map(void * ctx)
+static int ngx_http_r4x_process_start_map(void * ctx)
 {
     //yajl_gen g = (yajl_gen) ctx;
     return 1;//yajl_gen_status_ok == yajl_gen_map_open(g);
 }
 
 
-static int reformat_end_map(void * ctx)
+static int ngx_http_r4x_process_end_map(void * ctx)
 {
     //yajl_gen g = (yajl_gen) ctx;
     return 1;//yajl_gen_status_ok == yajl_gen_map_close(g);
 }
 
-static int reformat_start_array(void * ctx)
+static int ngx_http_r4x_process_start_array(void * ctx)
 {
     //yajl_gen g = (yajl_gen) ctx;
     return 1;//yajl_gen_status_ok == yajl_gen_array_open(g);
 }
 
-static int reformat_end_array(void * ctx)
+static int ngx_http_r4x_process_end_array(void * ctx)
 {
     //yajl_gen g = (yajl_gen) ctx;
     return 1;//yajl_gen_status_ok == yajl_gen_array_close(g);
 }
 
 yajl_callbacks callbacks = {
-    reformat_null,
-    reformat_boolean,
+    ngx_http_r4x_process_json_null,
+    ngx_http_r4x_process__boolean,
     NULL,
     NULL,
-    reformat_number,
-    reformat_string,
-    reformat_start_map,
-    reformat_map_key,
-    reformat_end_map,
-    reformat_start_array,
-    reformat_end_array
+    ngx_http_r4x_process_number,
+    ngx_http_r4x_process_string,
+    ngx_http_r4x_process_start_map,
+    ngx_http_r4x_process_key,
+    ngx_http_r4x_process_end_map,
+    ngx_http_r4x_process_start_array,
+    ngx_http_r4x_process_end_array
 };
    
 ngx_int_t 
-redis4nginx_proces_json_fields(u_char* jsonText, size_t jsonTextLen, 
-        redis4nginx_dict_t *json_fields_hash, char **argvs, size_t *lens)
+ngx_http_r4x_proces_json_fields(u_char* jsonText, size_t jsonTextLen, 
+        ngx_hash_t *json_fields_hash, char **argvs, size_t *lens)
 {
     yajl_handle hand;
     yajl_status stat;

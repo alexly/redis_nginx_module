@@ -3,16 +3,16 @@
 #endif
 
 #include "ddebug.h"
-#include "redis4nginx_module.h"
+#include "ngx_http_r4x_module.h"
 
 static ngx_str_t  evalsha_command_name = ngx_string("evalsha");
 
 static char *
-redis4nginx_add_directive_argument(ngx_conf_t *cf, redis4nginx_directive_t *directive, 
+ngx_http_r4x_add_directive_argument(ngx_conf_t *cf, ngx_http_r4x_directive_t *directive, 
         ngx_str_t *raw_arg, ngx_uint_t index)
 {
     ngx_http_compile_complex_value_t    ccv;
-    redis4nginx_directive_arg_t         *directive_arg = ngx_array_push(&directive->arguments_metadata);
+    ngx_http_r4x_directive_arg_t         *directive_arg = ngx_array_push(&directive->arguments_metadata);
     ngx_uint_t                          *dict_value;
     
     switch(raw_arg->data[0])
@@ -37,7 +37,7 @@ redis4nginx_add_directive_argument(ngx_conf_t *cf, redis4nginx_directive_t *dire
             directive_arg->type = REDIS4NGINX_JSON_FIELD_ARG;
             dict_value = ngx_palloc(cf->pool, sizeof(ngx_uint_t));
             *((int*)dict_value) = index;    
-            redis4nginx_copy_str(&directive_arg->string_value,  raw_arg, 1, raw_arg->len - 1, cf->pool);
+            ngx_http_r4x_copy_str(&directive_arg->string_value,  raw_arg, 1, raw_arg->len - 1, cf->pool);
             
             // prepare hash table
             if(directive->hash_elements == NULL) {
@@ -64,7 +64,7 @@ redis4nginx_add_directive_argument(ngx_conf_t *cf, redis4nginx_directive_t *dire
 
         default:
             directive_arg->type = REDIS4NGINX_STRING_ARG;
-            redis4nginx_copy_str(&directive_arg->string_value, 
+            ngx_http_r4x_copy_str(&directive_arg->string_value, 
                     raw_arg, 0, raw_arg->len, cf->pool);
             break;
     };
@@ -73,7 +73,7 @@ redis4nginx_add_directive_argument(ngx_conf_t *cf, redis4nginx_directive_t *dire
 }
 
 static char *
-redis4nginx_finalize_compile_directive(ngx_conf_t *cf, redis4nginx_directive_t *directive)
+ngx_http_r4x_finalize_compile_directive(ngx_conf_t *cf, ngx_http_r4x_directive_t *directive)
 {
     ngx_hash_init_t     hash_init;
     ngx_hash_t*         hash;
@@ -101,8 +101,8 @@ redis4nginx_finalize_compile_directive(ngx_conf_t *cf, redis4nginx_directive_t *
 }
 
 char *
-redis4nginx_compile_directive(ngx_conf_t *cf, redis4nginx_loc_conf_t * loc_conf, 
-        redis4nginx_srv_conf_t *srv_conf, redis4nginx_directive_t *directive)
+ngx_http_r4x_compile_directive(ngx_conf_t *cf, ngx_http_r4x_loc_conf_t * loc_conf, 
+        ngx_http_r4x_srv_conf_t *srv_conf, ngx_http_r4x_directive_t *directive)
 {
     ngx_str_t                          *value, *script, hash;
     ngx_uint_t                          i;
@@ -114,7 +114,7 @@ redis4nginx_compile_directive(ngx_conf_t *cf, redis4nginx_loc_conf_t * loc_conf,
     directive->raw_redis_argv_lens = ngx_palloc(cf->pool, sizeof(size_t) * (cf->args->nelts - 1));
     
     if(ngx_array_init(&directive->arguments_metadata, 
-            cf->pool, cf->args->nelts - 1,  sizeof(redis4nginx_directive_arg_t)) != NGX_OK) {
+            cf->pool, cf->args->nelts - 1,  sizeof(ngx_http_r4x_directive_arg_t)) != NGX_OK) {
         return NGX_CONF_ERROR;
     }
     
@@ -123,30 +123,30 @@ redis4nginx_compile_directive(ngx_conf_t *cf, redis4nginx_loc_conf_t * loc_conf,
         // skip eval beacause actual we use evalsha, and lua script, beacause it should not be compiled
         skip_args = 3;
         hash.data = ngx_palloc(cf->pool, 40);
-        redis4nginx_hash_script(&hash, &value[2]);
+        ngx_http_r4x_hash_script(&hash, &value[2]);
         
         // evalsha command
-        redis4nginx_add_directive_argument(cf, directive, &evalsha_command_name, 0);
+        ngx_http_r4x_add_directive_argument(cf, directive, &evalsha_command_name, 0);
         // sha1 script
-        redis4nginx_add_directive_argument(cf, directive, &hash, 1);
+        ngx_http_r4x_add_directive_argument(cf, directive, &hash, 1);
                 
         if(srv_conf->startup_scripts == NULL)
             srv_conf->startup_scripts = ngx_array_create(cf->pool, 10, sizeof(ngx_str_t));
         
         script = ngx_array_push(srv_conf->startup_scripts);
-        redis4nginx_copy_str(script, &value[2], 0, (&value[2])->len, cf->pool);
+        ngx_http_r4x_copy_str(script, &value[2], 0, (&value[2])->len, cf->pool);
     }
     
     for (i = skip_args; i < cf->args->nelts; i++)
-        if(redis4nginx_add_directive_argument(cf, directive, &value[i], i-1) != NGX_CONF_OK)
+        if(ngx_http_r4x_add_directive_argument(cf, directive, &value[i], i-1) != NGX_CONF_OK)
             return NGX_CONF_ERROR;
     
-    return redis4nginx_finalize_compile_directive(cf, directive);
+    return ngx_http_r4x_finalize_compile_directive(cf, directive);
 }
 
 ngx_int_t 
-redis4nginx_get_directive_argument_value(ngx_http_request_t *r, 
-        redis4nginx_directive_arg_t *arg, char **out, size_t *len)
+ngx_http_r4x_get_directive_argument_value(ngx_http_request_t *r, 
+        ngx_http_r4x_directive_arg_t *arg, char **out, size_t *len)
 {
     ngx_str_t value;
     

@@ -3,7 +3,7 @@
 #endif
 
 #include "ddebug.h"
-#include "redis4nginx_module.h"
+#include "ngx_http_r4x_module.h"
 #include "sha1.h"
 
 static u_char null_value[] = "NULL";
@@ -48,7 +48,7 @@ ngx_int_t parse_redis_reply(ngx_http_request_t *r, redisReply *reply, ngx_buf_t 
 }
 
 void
-redis4nginx_send_redis_reply(ngx_http_request_t *r, redisAsyncContext *c, redisReply *reply)
+ngx_http_r4x_send_redis_reply(ngx_http_request_t *r, redisAsyncContext *c, redisReply *reply)
 {   
     ngx_int_t    rc;
     ngx_buf_t   *buf;
@@ -98,7 +98,7 @@ redis4nginx_send_redis_reply(ngx_http_request_t *r, redisAsyncContext *c, redisR
 /* Hash the scripit into a SHA1 digest. We use this as Lua function name.
  * Digest should point to a 41 bytes buffer: 40 for SHA1 converted into an
  * hexadecimal number, plus 1 byte for null term. */
-void redis4nginx_hash_script(ngx_str_t *digest, ngx_str_t *script) {
+void ngx_http_r4x_hash_script(ngx_str_t *digest, ngx_str_t *script) {
     SHA1_CTX ctx;
     unsigned char hash[20];
     char *cset = "0123456789abcdef";
@@ -117,7 +117,7 @@ void redis4nginx_hash_script(ngx_str_t *digest, ngx_str_t *script) {
 }
 
 char* 
-ngx_string_to_c_string(ngx_str_t *str, ngx_pool_t *pool)
+ngx_http_r4x_string_to_c_string(ngx_str_t *str, ngx_pool_t *pool)
 {
     char* result = NULL;
     if(str != NULL && str->len > 0) 
@@ -131,7 +131,7 @@ ngx_string_to_c_string(ngx_str_t *str, ngx_pool_t *pool)
 }
 
 ngx_int_t 
-redis4nginx_copy_str(ngx_str_t *dest, ngx_str_t *src, size_t offset, size_t len, ngx_pool_t *pool)
+ngx_http_r4x_copy_str(ngx_str_t *dest, ngx_str_t *src, size_t offset, size_t len, ngx_pool_t *pool)
 {
     ngx_pool_t *use_pool;
     use_pool = pool == NULL ? ngx_cycle->pool : pool;
