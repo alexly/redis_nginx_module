@@ -26,7 +26,7 @@ static u_char null_value[] = "NULL";
 static u_char array_value[] = "REDIS_REPLY_ARRAY";
 
 static 
-ngx_int_t parse_redis_reply(ngx_http_request_t *r, redisReply *reply, ngx_buf_t *buf) 
+ngx_int_t ngx_http_r4x_prepare_reply(ngx_http_request_t *r, redisReply *reply, ngx_buf_t *buf) 
 {
     switch(reply->type)
     {
@@ -86,7 +86,7 @@ ngx_http_r4x_send_redis_reply(ngx_http_request_t *r, redisAsyncContext *c, redis
     buf->memory = 1;    // this buffer is in memory
     buf->last_buf = 1;  // this is the last buffer in the buffer chain
     
-    if(parse_redis_reply(r, reply, buf) != NGX_OK)
+    if(ngx_http_r4x_prepare_reply(r, reply, buf) != NGX_OK)
     {
         ngx_http_finalize_request(r, NGX_HTTP_INTERNAL_SERVER_ERROR);
         return;

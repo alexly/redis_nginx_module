@@ -31,23 +31,23 @@
 
 extern ngx_module_t ngx_http_r4x_module;
 
+struct ngx_http_r4x_directive_t;
+typedef ngx_int_t (ngx_http_r4x_run_directive_t)(ngx_http_request_t *, struct ngx_http_r4x_directive_t *);
+
 typedef struct {
-    ngx_uint_t type;
+    ngx_uint_t                      type;
     union {
-        ngx_str_t                   string_value;
+        ngx_str_t                   value;
         ngx_http_complex_value_t    *compilied;
     };
 } ngx_http_r4x_directive_arg_t;
 
-typedef struct {
+typedef struct ngx_http_r4x_directive_t {
     ngx_array_t                     arguments_metadata;    // metadata for redis arguments
-    unsigned                        finalize:1;            // 1 - finalize request, 0 - only exec redis command
     char                            **raw_redis_argvs;
     size_t                          *raw_redis_argv_lens;
-    union {
-        ngx_hash_t*                 json_fields_hash;
-        ngx_hash_keys_arrays_t      *hash_elements;
-    };
+    redisCallbackFn                 *process_reply;
+    unsigned                        require_json_field:1;
 } ngx_http_r4x_directive_t;
 
 typedef struct {
@@ -85,17 +85,22 @@ ngx_http_r4x_send_redis_reply(ngx_http_request_t *r, redisAsyncContext *c,
 // Directive utilities:
 ngx_int_t
 ngx_http_r4x_get_directive_argument_value(ngx_http_request_t *r, 
-        ngx_http_r4x_directive_arg_t *arg, char **value, size_t *len);
+        ngx_http_r4x_directive_arg_t *arg, char **value, size_t *len, ngx_hash_t* json_fiels_hash);
+
+ngx_int_t 
+ngx_http_r4x_run_directive(ngx_http_request_t *r, 
+        ngx_http_r4x_directive_t *directive, ngx_hash_t *json_fields_hash);
 
 char *
 ngx_http_r4x_compile_directive(ngx_conf_t *cf, ngx_http_r4x_loc_conf_t * loc_conf, 
         ngx_http_r4x_srv_conf_t *srv_conf, ngx_http_r4x_directive_t *directive);
 
 // Json utilities:
-ngx_int_t
-ngx_http_r4x_proces_json_fields(u_char* jsonText, size_t jsonTextLen, 
-        ngx_hash_t *json_fields_hash, char **argvs, size_t *lens);
+ngx_int_t 
+ngx_http_r4x_parse_request_body_as_json(ngx_http_request_t *r);
         
+ngx_array_t*  ngx_http_r4x_get_parser_json();
+
 // String utilities:
 void
 ngx_http_r4x_hash_script(ngx_str_t *digest, ngx_str_t *script);

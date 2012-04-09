@@ -28,100 +28,165 @@
 #include <stdlib.h>
 #include <string.h>
 
-struct {
-    ngx_hash_t      *json_fields_hash;
-    char                    **argvs;
-    size_t                  *lens;
-    unsigned                key_found:1;
-    ngx_uint_t              value_index;
-    unsigned                array_json:1;
-} parser_ctx;
+typedef struct {
+    const char              *value;
+    size_t                  len;
+} ngx_http_r4x_json_field_t;
+
+struct { 
+    ngx_str_t               last_key;    
+    ngx_pool_t              *pool;
+    unsigned                array_started:1;
+    unsigned                map_started:1;
+    ngx_array_t             fields_hashes;
+    ngx_hash_keys_arrays_t  tmp_hash_keys;
+    
+} json_state;
+
 
 // config generator
 static yajl_gen g = NULL;
 
-void ngx_http_r4x_set_json_field(const char * s, size_t l)
+static ngx_int_t ngx_http_r4x_add_field_to_hash(u_char *val, size_t len)
 {
-    parser_ctx.argvs[parser_ctx.value_index] = (char*)s;
-    parser_ctx.lens[parser_ctx.value_index] = l;
-    parser_ctx.key_found = 0;
+    ngx_str_t *field = ngx_palloc(json_state.pool, sizeof(ngx_str_t));
+    field->data     = val;
+    field->len      = len;
+
+    if(ngx_hash_add_key(&json_state.tmp_hash_keys, &json_state.last_key, 
+        field, NGX_HASH_READONLY_KEY) != NGX_OK)
+    {
+        return NGX_ERROR;
+    }
+    
+    ngx_str_null(&json_state.last_key);
+    
+    return NGX_OK;
 }
 
 static int ngx_http_r4x_process_json_null(void * ctx)
 {
-    return 1;
+    if(json_state.last_key.data 
+        && json_state.last_key.len
+        && ngx_http_r4x_add_field_to_hash((u_char*)"NIL", sizeof("NIL")-1) == NGX_OK) 
+    {
+        return 1;
+    }
+        
+    return 0;
 }
 
-static int ngx_http_r4x_process__boolean(void * ctx, int boolean)
+static int ngx_http_r4x_process_boolean(void * ctx, int boolean)
 {
     const char * val = boolean ? "true" : "false";
     
-    if(parser_ctx.key_found) {
-        ngx_http_r4x_set_json_field(val, sizeof(val));
+    if(json_state.last_key.data 
+        && json_state.last_key.len
+        && ngx_http_r4x_add_field_to_hash((u_char*)val, sizeof(val)-1) == NGX_OK)
+    {
+        return 1;
     }
-    return 1;
+    
+    return 0;
 }
 
 static int ngx_http_r4x_process_number(void * ctx, const char * val, size_t len)
 {
-    if(parser_ctx.key_found) {
-        ngx_http_r4x_set_json_field(val, len);
+    if(json_state.last_key.data
+        && json_state.last_key.len
+        && ngx_http_r4x_add_field_to_hash((u_char*)val, len) == NGX_OK)
+    {
+        return 1;
     }
-    return 1;
+    
+    return 0;
 }
 
-static int ngx_http_r4x_process_string(void * ctx, const unsigned char * string_val, size_t len)
+static int ngx_http_r4x_process_string(void * ctx, const unsigned char * val, size_t len)
 {
-    if(parser_ctx.key_found) {
-        ngx_http_r4x_set_json_field((const char*)string_val, len);
+    if(json_state.last_key.data
+        && json_state.last_key.len
+        && ngx_http_r4x_add_field_to_hash((u_char*)val, len) == NGX_OK)
+    {
+        return 1;
     }
-    return 1;
+    
+    return 0;
 }
 
-static int ngx_http_r4x_process_key(void * ctx, const unsigned char * string_val, size_t len)
+static int ngx_http_r4x_process_key(void * ctx, const unsigned char * key, size_t key_len)
 {
-    ngx_uint_t          hash_key;
-    ngx_uint_t*         find;
-    hash_key    =       ngx_hash_strlow((u_char*)string_val, (u_char*)string_val, len);
-    
-    find = (ngx_uint_t*) ngx_hash_find(parser_ctx.json_fields_hash,  hash_key, (u_char*) string_val, len);
-    
-    if(find) {
-        parser_ctx.value_index = *find;
-        parser_ctx.key_found = 1;
-    }
-
+    json_state.last_key.data    = (u_char*)key;
+    json_state.last_key.len     = key_len;
+     
     return 1;
 }
 
 static int ngx_http_r4x_process_start_map(void * ctx)
 {
-    //yajl_gen g = (yajl_gen) ctx;
-    return 1;//yajl_gen_status_ok == yajl_gen_map_open(g);
-}
+    if(json_state.map_started) {
+        //TODO: logging - redis4nginx json parser doesn't supports  nested maps in the request body
+        return 0;
+    }
+    
+    json_state.tmp_hash_keys.pool = json_state.pool;
+    json_state.tmp_hash_keys.temp_pool = json_state.pool;
 
+    if (ngx_hash_keys_array_init(&json_state.tmp_hash_keys, NGX_HASH_SMALL) != NGX_OK)
+        return 0;
+                
+    json_state.map_started = 1;
+    return 1;
+}
 
 static int ngx_http_r4x_process_end_map(void * ctx)
 {
-    //yajl_gen g = (yajl_gen) ctx;
-    return 1;//yajl_gen_status_ok == yajl_gen_map_close(g);
+    ngx_hash_init_t     hash_init;
+    ngx_hash_t*         hash;
+    
+    if(!json_state.map_started) {
+        // TODOL logging
+        return 0;
+    }
+        
+    hash                    = ngx_array_push(&json_state.fields_hashes);
+    hash_init.hash          = hash;
+    hash_init.key           = ngx_hash_key; 
+    hash_init.max_size      = 1024*10;
+    hash_init.bucket_size   = ngx_align(64, ngx_cacheline_size);
+    hash_init.name          = "json_fields_hash";
+    hash_init.pool          = json_state.pool;
+    hash_init.temp_pool     = NULL;
+
+    if (ngx_hash_init(&hash_init, (ngx_hash_key_t*) json_state.tmp_hash_keys.keys.elts, 
+            json_state.tmp_hash_keys.keys.nelts)!=NGX_OK){
+        //TODO: error logging
+        return 0;
+    }
+        
+    json_state.map_started = 0;
+    return 1;
 }
 
 static int ngx_http_r4x_process_start_array(void * ctx)
 {
-    //yajl_gen g = (yajl_gen) ctx;
-    return 1;//yajl_gen_status_ok == yajl_gen_array_open(g);
+    if(json_state.array_started) {
+        //TODO: logging - redis4nginx json parser supports nested arrays in the request body
+        return 0;
+    }
+    
+    json_state.array_started = 1;
+    return 1;
 }
 
 static int ngx_http_r4x_process_end_array(void * ctx)
 {
-    //yajl_gen g = (yajl_gen) ctx;
-    return 1;//yajl_gen_status_ok == yajl_gen_array_close(g);
+    return 1;
 }
 
 yajl_callbacks callbacks = {
     ngx_http_r4x_process_json_null,
-    ngx_http_r4x_process__boolean,
+    ngx_http_r4x_process_boolean,
     NULL,
     NULL,
     ngx_http_r4x_process_number,
@@ -134,19 +199,21 @@ yajl_callbacks callbacks = {
 };
    
 ngx_int_t 
-ngx_http_r4x_proces_json_fields(u_char* jsonText, size_t jsonTextLen, 
-        ngx_hash_t *json_fields_hash, char **argvs, size_t *lens)
+ngx_http_r4x_parse_request_body_as_json(ngx_http_request_t *r)
 {
     yajl_handle hand;
     yajl_status stat;
     
+    json_state.pool             = r->pool;
+    json_state.map_started      = 0;
+    json_state.array_started    = 0;
+    ngx_str_null(&json_state.last_key);
+    
+    ngx_array_init(&json_state.fields_hashes, json_state.pool, 5, sizeof(ngx_hash_t));
+    
     if(g == NULL)
         g = yajl_gen_alloc(NULL);
-    
-    parser_ctx.argvs = argvs;
-    parser_ctx.lens = lens;
-    parser_ctx.json_fields_hash = json_fields_hash;
-    
+        
     yajl_gen_config(g, yajl_gen_beautify, 1);
     yajl_gen_config(g, yajl_gen_validate_utf8, 1);
 
@@ -157,7 +224,8 @@ ngx_http_r4x_proces_json_fields(u_char* jsonText, size_t jsonTextLen,
     
     yajl_gen_config(g, yajl_gen_beautify, 0);
     
-    stat = yajl_parse(hand, jsonText, jsonTextLen);
+    stat = yajl_parse(hand, r->request_body->buf->pos, 
+        r->request_body->buf->last - r->request_body->buf->pos);
     
     if (stat != yajl_status_ok) {
         //TODO: logging  str = yajl_get_error(hand, 1, jsonText, jsonTextLen);
@@ -172,4 +240,9 @@ ngx_http_r4x_proces_json_fields(u_char* jsonText, size_t jsonTextLen,
     }
     
     return NGX_OK;
+}
+
+ngx_array_t*  ngx_http_r4x_get_parser_json()
+{
+    return &json_state.fields_hashes;
 }

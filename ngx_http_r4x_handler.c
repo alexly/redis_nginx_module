@@ -21,7 +21,7 @@
 #include "ddebug.h"
 #include "ngx_http_r4x_module.h"
 
-static void 
+void 
 ngx_http_r4x_exec_return_callback(redisAsyncContext *c, void *repl, void *privdata)
 {
     ngx_http_r4x_request_ctx *ctx;
@@ -45,53 +45,47 @@ ngx_http_r4x_exec_return_callback(redisAsyncContext *c, void *repl, void *privda
 }
 
 static ngx_int_t 
-ngx_http_r4x_process_directive(ngx_http_request_t *r, ngx_http_r4x_directive_t *directive)
+ngx_http_r4x_prepare_and_run_directive(ngx_http_request_t *r, ngx_http_r4x_directive_t *directive)
 {
-    ngx_uint_t i;
-    ngx_int_t rc;
-    ngx_http_r4x_directive_arg_t *directive_arg;
-    
-    directive_arg = directive->arguments_metadata.elts;
+    ngx_uint_t                      i;
+    ngx_array_t                     *json_fields_hashes = NULL;
+    ngx_hash_t                      *json_fields_hash   = NULL;
         
     if(directive->arguments_metadata.nelts > 0)
     {
-        for (i = 0; i <= directive->arguments_metadata.nelts - 1; i++)
-        {
+        if(r->request_body != NULL) {
             
-            if(ngx_http_r4x_get_directive_argument_value(r, &directive_arg[i], 
-                    &directive->raw_redis_argvs[i], &directive->raw_redis_argv_lens[i]) != NGX_OK)
-                return NGX_ERROR;
-        }
-        
-        if(directive->json_fields_hash != NULL && r->request_body != NULL) {
-            
-            rc = ngx_http_r4x_proces_json_fields(r->request_body->buf->pos, 
-                    r->request_body->buf->last - r->request_body->buf->pos, 
-                    directive->json_fields_hash, 
-                    directive->raw_redis_argvs, directive->raw_redis_argv_lens);
-                    
-            if(rc == NGX_AGAIN)
-            {
-                // Process array
-            }
-            else if(rc != NGX_OK)
+            // parse request body
+            if(ngx_http_r4x_parse_request_body_as_json(r) != NGX_OK)
                 return NGX_HTTP_INTERNAL_SERVER_ERROR;
             
+            // get parsed json fields
+            json_fields_hashes = ngx_http_r4x_get_parser_json();
         }
-    }
-    
-    if(ngx_http_r4x_async_command_argv(directive->finalize ?  ngx_http_r4x_exec_return_callback : NULL, 
-                                    r,  directive->arguments_metadata.nelts, 
-                                    directive->raw_redis_argvs, directive->raw_redis_argv_lens) != NGX_OK)
-    {
-        return NGX_ERROR;
+
+        if(json_fields_hashes != NULL) {
+            json_fields_hash = json_fields_hashes->elts;
+
+            for (i = 0; i <= json_fields_hashes->nelts - 1; i++)
+            {                
+                if(ngx_http_r4x_run_directive(r, directive, &json_fields_hash[i]) != NGX_OK)
+                    return NGX_HTTP_INTERNAL_SERVER_ERROR;
+                
+                if(!directive->require_json_field)
+                    break;
+            }   
+        }
+        else {
+            if(ngx_http_r4x_run_directive(r, directive, NULL) != NGX_OK)
+                return NGX_HTTP_INTERNAL_SERVER_ERROR;
+        }
     }
     
     return NGX_OK;
 }
 
 static void
-ngx_http_r4x_run_directives(ngx_http_request_t *r)
+ngx_http_r4x_directives_foreach(ngx_http_request_t *r)
 {
     ngx_http_r4x_loc_conf_t *loc_conf;
     ngx_http_r4x_directive_t *directive;
@@ -106,7 +100,7 @@ ngx_http_r4x_run_directives(ngx_http_request_t *r)
     {
         for (i = 0; i <= directive_count - 1; i++)
         {
-            if(ngx_http_r4x_process_directive(r, &directive[i]) != NGX_OK)
+            if(ngx_http_r4x_prepare_and_run_directive(r, &directive[i]) != NGX_OK)
             {
                 ngx_http_finalize_request(r, NGX_HTTP_INTERNAL_SERVER_ERROR);
                 return;
@@ -142,7 +136,7 @@ ngx_http_r4x_exec_handler(ngx_http_request_t *r)
         
         ctx->wait_read_body = 0;
         
-        ngx_http_r4x_run_directives(r);
+        ngx_http_r4x_directives_foreach(r);
         
         return NGX_DONE;
     }
@@ -154,7 +148,7 @@ ngx_http_r4x_exec_handler(ngx_http_request_t *r)
         r->request_body_in_single_buf = 1;
         ctx->wait_read_body = 1;
         
-        rc = ngx_http_read_client_request_body(r, ngx_http_r4x_run_directives);
+        rc = ngx_http_read_client_request_body(r, ngx_http_r4x_directives_foreach);
         
         if (rc >= NGX_HTTP_SPECIAL_RESPONSE)
             return rc;
