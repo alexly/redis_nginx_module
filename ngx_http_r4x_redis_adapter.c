@@ -21,17 +21,7 @@
 #include "ddebug.h"
 #include "ngx_http_r4x_module.h"
 
-// context struct in the request handling cycle, holding
-// the current states of the command evaluator
-typedef struct ngx_http_r4x_connection_ctx_t {
-    redisAsyncContext *async;
-    ngx_connection_t *conn;
-    unsigned connected:1;
-    char* host;
-    ngx_int_t port;
-} ngx_http_r4x_connection_ctx_t;
-
-static ngx_http_r4x_connection_ctx_t* connection = NULL;
+static ngx_http_r4x_redis_node_t* sing_node = NULL;
 
 static ngx_int_t ngx_http_r4x_add_event(ngx_connection_t *c, ngx_int_t event);
 static ngx_int_t ngx_http_r4x_del_event(ngx_connection_t *c, ngx_int_t event);
@@ -52,52 +42,52 @@ ngx_int_t ngx_http_r4x_init_connection(ngx_http_r4x_srv_conf_t *serv_conf)
     ngx_uint_t i;
     ngx_str_t *script;
     
-    if(connection == NULL)
+    if(sing_node == NULL)
     {    
         if(serv_conf == NULL)
             return NGX_ERROR;
         
-        connection = ngx_palloc(ngx_cycle->pool, sizeof(ngx_http_r4x_connection_ctx_t));
-        connection->host = ngx_http_r4x_string_to_c_string(&serv_conf->host, NULL);              
-        connection->port = serv_conf->port;
-        connection->connected = 0;
+        sing_node = ngx_palloc(ngx_cycle->pool, sizeof(ngx_http_r4x_redis_node_t));
+        sing_node->host = ngx_http_r4x_string_to_c_string(&serv_conf->host, NULL);              
+        sing_node->port = serv_conf->port;
+        sing_node->connected = 0;
     }
 
-    if(connection->connected == 0) 
+    if(sing_node->connected == 0) 
     {
-        if(connection->port >=0) {
-            connection->async = redisAsyncConnect(
-                        (const char*)connection->host,
-                        connection->port);
+        if(sing_node->port >=0) {
+            sing_node->async = redisAsyncConnect(
+                        (const char*)sing_node->host,
+                        sing_node->port);
         }
         else {
-            connection->async = redisAsyncConnectUnix((const char*)connection->host);
+            sing_node->async = redisAsyncConnectUnix((const char*)sing_node->host);
         }
 
-        if(connection->async->err) {
+        if(sing_node->async->err) {
             return NGX_ERROR;
         }
 
-        redisAsyncSetConnectCallback(connection->async, ngx_http_r4x_connecte_event_handler);
-        redisAsyncSetDisconnectCallback(connection->async, ngx_http_r4x_disconnecte_event_handler);
+        redisAsyncSetConnectCallback(sing_node->async, ngx_http_r4x_connecte_event_handler);
+        redisAsyncSetDisconnectCallback(sing_node->async, ngx_http_r4x_disconnecte_event_handler);
 
-        if(ngx_http_r4x_add_connection(connection->async->c.fd, &connection->conn) != NGX_OK) {
+        if(ngx_http_r4x_add_connection(sing_node->async->c.fd, &sing_node->conn) != NGX_OK) {
             return NGX_ERROR;
         }
 
-        connection->conn->read->handler = ngx_http_r4x_read_event_handler;
-        connection->conn->write->handler = ngx_http_r4x_write_event_handler;
+        sing_node->conn->read->handler = ngx_http_r4x_read_event_handler;
+        sing_node->conn->write->handler = ngx_http_r4x_write_event_handler;
 
-        connection->async->data = connection;
-        connection->conn->data = connection;
+        sing_node->async->data = sing_node;
+        sing_node->conn->data = sing_node;
 
         // Register functions to start/stop listening for events
-        connection->async->ev.addRead = ngx_http_r4x_add_read;
-        connection->async->ev.delRead = ngx_http_r4x_del_read;
-        connection->async->ev.addWrite = ngx_http_r4x_add_write;
-        connection->async->ev.delWrite = ngx_http_r4x_del_write;
-        connection->async->ev.data = connection;
-        connection->async->ev.cleanup = ngx_http_r4x_cleanup;
+        sing_node->async->ev.addRead = ngx_http_r4x_add_read;
+        sing_node->async->ev.delRead = ngx_http_r4x_del_read;
+        sing_node->async->ev.addWrite = ngx_http_r4x_add_write;
+        sing_node->async->ev.delWrite = ngx_http_r4x_del_write;
+        sing_node->async->ev.data = sing_node;
+        sing_node->async->ev.cleanup = ngx_http_r4x_cleanup;
 
         if(serv_conf == NULL)
             return NGX_ERROR;
@@ -124,7 +114,7 @@ ngx_int_t ngx_http_r4x_async_command(redisCallbackFn *fn, void *privdata, const 
     int status;
     
     va_start(ap,format);
-    status = redisvAsyncCommand(connection->async,fn, privdata, format, ap);
+    status = redisvAsyncCommand(sing_node->async,fn, privdata, format, ap);
     va_end(ap);
     
     return status == REDIS_OK ?  NGX_OK : NGX_ERROR;
@@ -133,59 +123,59 @@ ngx_int_t ngx_http_r4x_async_command(redisCallbackFn *fn, void *privdata, const 
 ngx_int_t ngx_http_r4x_async_command_argv(redisCallbackFn *fn, void *privdata, int argc, char **argv, const size_t *argvlen)
 {
     int status;
-    status = redisAsyncCommandArgv(connection->async, fn, privdata, argc, (const char**)argv, argvlen);
+    status = redisAsyncCommandArgv(sing_node->async, fn, privdata, argc, (const char**)argv, argvlen);
     
     return status == REDIS_OK ?  NGX_OK : NGX_ERROR;
 }
 
 static void ngx_http_r4x_connecte_event_handler(const redisAsyncContext *ctx)
 {
-    ngx_http_r4x_connection_ctx_t *context  = ctx->data;
-    context->connected = 1;
+    ngx_http_r4x_redis_node_t *node  = ctx->data;
+    node->connected = 1;
 }
 
 static void ngx_http_r4x_disconnecte_event_handler(const redisAsyncContext *ctx, int status)
 {
-    ngx_http_r4x_connection_ctx_t *context  = ctx->data;
-    context->connected = 0;
+    ngx_http_r4x_redis_node_t *node  = ctx->data;
+    node->connected = 0;
 }
 
 static void ngx_http_r4x_read_event_handler(ngx_event_t *handle)
 {
     ngx_connection_t *conn = handle->data;
-    ngx_http_r4x_connection_ctx_t *context  = conn->data;
-    redisAsyncHandleRead(context->async);
+    ngx_http_r4x_redis_node_t *node  = conn->data;
+    redisAsyncHandleRead(node->async);
 }
 
 static void ngx_http_r4x_write_event_handler(ngx_event_t *handle)
 {
     ngx_connection_t *conn = handle->data;
-    ngx_http_r4x_connection_ctx_t *context  = conn->data;
-    redisAsyncHandleWrite(context->async);
+    ngx_http_r4x_redis_node_t *node  = conn->data;
+    redisAsyncHandleWrite(node->async);
 }
 
 static void ngx_http_r4x_add_read(void *privdata)
 {
-    ngx_http_r4x_connection_ctx_t *conn = (ngx_http_r4x_connection_ctx_t*)privdata;
-    ngx_http_r4x_add_event(conn->conn, NGX_READ_EVENT);
+    ngx_http_r4x_redis_node_t *node = privdata;
+    ngx_http_r4x_add_event(node->conn, NGX_READ_EVENT);
 }
 
 static void ngx_http_r4x_del_read(void *privdata)
 {
-    ngx_http_r4x_connection_ctx_t *conn = (ngx_http_r4x_connection_ctx_t*)privdata;
-    ngx_http_r4x_del_event(conn->conn, NGX_READ_EVENT);
+    ngx_http_r4x_redis_node_t *node = privdata;
+    ngx_http_r4x_del_event(node->conn, NGX_READ_EVENT);
 }
 
 static void ngx_http_r4x_add_write(void *privdata)
 {
-    ngx_http_r4x_connection_ctx_t *conn = (ngx_http_r4x_connection_ctx_t*)privdata;
-    ngx_http_r4x_add_event(conn->conn, NGX_WRITE_EVENT);
+    ngx_http_r4x_redis_node_t *node = privdata;
+    ngx_http_r4x_add_event(node->conn, NGX_WRITE_EVENT);
 }
 
 static void ngx_http_r4x_del_write(void *privdata)
 {
-    ngx_http_r4x_connection_ctx_t *conn = (ngx_http_r4x_connection_ctx_t*)privdata;
-    ngx_http_r4x_del_event(conn->conn, NGX_WRITE_EVENT);
+    ngx_http_r4x_redis_node_t *node = privdata;
+    ngx_http_r4x_del_event(node->conn, NGX_WRITE_EVENT);
 }
 
 static void ngx_http_r4x_cleanup(void *privdata)

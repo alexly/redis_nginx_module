@@ -30,6 +30,9 @@ ngx_http_r4x_exec_return_callback(redisAsyncContext *c, void *repl, void *privda
     
     ctx = ngx_http_get_module_ctx(r, ngx_http_r4x_module);
     
+    if(rr == NULL) // TODO: logging connection to redis db is lost
+        ngx_http_finalize_request(r, NGX_HTTP_INTERNAL_SERVER_ERROR);
+    
     if(!ctx->completed) 
     {
         ctx->completed = 1;
@@ -37,10 +40,7 @@ ngx_http_r4x_exec_return_callback(redisAsyncContext *c, void *repl, void *privda
         if(ctx->wait_read_body)
             r->main->count--;
         
-        if(rr == NULL) // TODO: logging connection to redis db is lost
-            ngx_http_finalize_request(r, NGX_HTTP_INTERNAL_SERVER_ERROR);
-        else
-            ngx_http_r4x_send_redis_reply(r, c, rr);
+        ngx_http_r4x_send_redis_reply(r, c, rr);
     }
 }
 
@@ -71,15 +71,16 @@ ngx_http_r4x_prepare_and_run_directive(ngx_http_request_t *r, ngx_http_r4x_direc
                 if(ngx_http_r4x_run_directive(r, directive, &json_fields_hash[i]) != NGX_OK)
                     return NGX_HTTP_INTERNAL_SERVER_ERROR;
                 
-                if(!directive->require_json_field)
+                if(!directive->require_json_field) 
                     break;
-            }   
-        }
-        else {
-            if(ngx_http_r4x_run_directive(r, directive, NULL) != NGX_OK)
-                return NGX_HTTP_INTERNAL_SERVER_ERROR;
+            }
+            
+            return NGX_OK;
         }
     }
+    
+    if(ngx_http_r4x_run_directive(r, directive, NULL) != NGX_OK)
+        return NGX_HTTP_INTERNAL_SERVER_ERROR;
     
     return NGX_OK;
 }

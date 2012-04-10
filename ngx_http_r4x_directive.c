@@ -130,8 +130,7 @@ ngx_http_r4x_get_directive_argument_value(ngx_http_request_t *r,
             }
 
             *out = "nil";
-            *len = 3;                
-            
+            *len = 3;
             break;
         case REDIS4NGINX_COMPILIED_ARG:
             if (ngx_http_complex_value(r, arg->compilied, &value) != NGX_OK)

@@ -22,8 +22,8 @@
 #include "ngx_http_r4x_module.h"
 #include "sha1.h"
 
-static u_char null_value[] = "NULL";
-static u_char array_value[] = "REDIS_REPLY_ARRAY";
+static u_char null_value[] = "null";
+static u_char array_value[] = "{\"err\": \"redis arrays do not send by http\"}";
 
 static 
 ngx_int_t ngx_http_r4x_prepare_reply(ngx_http_request_t *r, redisReply *reply, ngx_buf_t *buf) 

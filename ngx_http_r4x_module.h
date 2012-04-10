@@ -31,9 +31,6 @@
 
 extern ngx_module_t ngx_http_r4x_module;
 
-struct ngx_http_r4x_directive_t;
-typedef ngx_int_t (ngx_http_r4x_run_directive_t)(ngx_http_request_t *, struct ngx_http_r4x_directive_t *);
-
 typedef struct {
     ngx_uint_t                      type;
     union {
@@ -42,7 +39,7 @@ typedef struct {
     };
 } ngx_http_r4x_directive_arg_t;
 
-typedef struct ngx_http_r4x_directive_t {
+typedef struct {
     ngx_array_t                     arguments_metadata;    // metadata for redis arguments
     char                            **raw_redis_argvs;
     size_t                          *raw_redis_argv_lens;
@@ -65,6 +62,15 @@ typedef struct {
     unsigned                        completed:1;
     unsigned                        wait_read_body:1;
 } ngx_http_r4x_request_ctx;
+
+typedef struct {
+    redisAsyncContext               *async;
+    ngx_connection_t                *conn;
+    unsigned                        connected:1;
+    unsigned                        master_node:1;
+    char*                           host;
+    ngx_int_t                       port;
+} ngx_http_r4x_redis_node_t;
 
 // Redis DB API:
 ngx_int_t

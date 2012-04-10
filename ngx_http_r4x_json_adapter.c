@@ -28,11 +28,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-typedef struct {
-    const char              *value;
-    size_t                  len;
-} ngx_http_r4x_json_field_t;
-
 struct { 
     ngx_str_t               last_key;    
     ngx_pool_t              *pool;
