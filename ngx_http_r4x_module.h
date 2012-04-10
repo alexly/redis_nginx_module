@@ -94,7 +94,7 @@ ngx_http_r4x_get_directive_argument_value(ngx_http_request_t *r,
         ngx_http_r4x_directive_arg_t *arg, char **value, size_t *len, ngx_hash_t* json_fiels_hash);
 
 ngx_int_t 
-ngx_http_r4x_run_directive(ngx_http_request_t *r, 
+ngx_http_r4x_redis_query(ngx_http_request_t *r, 
         ngx_http_r4x_directive_t *directive, ngx_hash_t *json_fields_hash);
 
 char *

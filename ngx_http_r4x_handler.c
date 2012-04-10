@@ -22,7 +22,7 @@
 #include "ngx_http_r4x_module.h"
 
 void 
-ngx_http_r4x_exec_return_callback(redisAsyncContext *c, void *repl, void *privdata)
+ngx_http_r4x_process_redis_reply(redisAsyncContext *c, void *repl, void *privdata)
 {
     ngx_http_r4x_request_ctx *ctx;
     ngx_http_request_t *r = privdata;
@@ -45,7 +45,7 @@ ngx_http_r4x_exec_return_callback(redisAsyncContext *c, void *repl, void *privda
 }
 
 static ngx_int_t 
-ngx_http_r4x_prepare_and_run_directive(ngx_http_request_t *r, ngx_http_r4x_directive_t *directive)
+ngx_http_r4x_process_directive(ngx_http_request_t *r, ngx_http_r4x_directive_t *directive)
 {
     ngx_uint_t                      i;
     ngx_array_t                     *json_fields_hashes = NULL;
@@ -68,7 +68,7 @@ ngx_http_r4x_prepare_and_run_directive(ngx_http_request_t *r, ngx_http_r4x_direc
 
             for (i = 0; i <= json_fields_hashes->nelts - 1; i++)
             {                
-                if(ngx_http_r4x_run_directive(r, directive, &json_fields_hash[i]) != NGX_OK)
+                if(ngx_http_r4x_redis_query(r, directive, &json_fields_hash[i]) != NGX_OK)
                     return NGX_HTTP_INTERNAL_SERVER_ERROR;
                 
                 if(!directive->require_json_field) 
@@ -79,14 +79,14 @@ ngx_http_r4x_prepare_and_run_directive(ngx_http_request_t *r, ngx_http_r4x_direc
         }
     }
     
-    if(ngx_http_r4x_run_directive(r, directive, NULL) != NGX_OK)
+    if(ngx_http_r4x_redis_query(r, directive, NULL) != NGX_OK)
         return NGX_HTTP_INTERNAL_SERVER_ERROR;
     
     return NGX_OK;
 }
 
 static void
-ngx_http_r4x_directives_foreach(ngx_http_request_t *r)
+ngx_http_r4x_foreach_directives(ngx_http_request_t *r)
 {
     ngx_http_r4x_loc_conf_t *loc_conf;
     ngx_http_r4x_directive_t *directive;
@@ -101,7 +101,7 @@ ngx_http_r4x_directives_foreach(ngx_http_request_t *r)
     {
         for (i = 0; i <= directive_count - 1; i++)
         {
-            if(ngx_http_r4x_prepare_and_run_directive(r, &directive[i]) != NGX_OK)
+            if(ngx_http_r4x_process_directive(r, &directive[i]) != NGX_OK)
             {
                 ngx_http_finalize_request(r, NGX_HTTP_INTERNAL_SERVER_ERROR);
                 return;
@@ -137,7 +137,7 @@ ngx_http_r4x_exec_handler(ngx_http_request_t *r)
         
         ctx->wait_read_body = 0;
         
-        ngx_http_r4x_directives_foreach(r);
+        ngx_http_r4x_foreach_directives(r);
         
         return NGX_DONE;
     }
@@ -149,7 +149,7 @@ ngx_http_r4x_exec_handler(ngx_http_request_t *r)
         r->request_body_in_single_buf = 1;
         ctx->wait_read_body = 1;
         
-        rc = ngx_http_read_client_request_body(r, ngx_http_r4x_directives_foreach);
+        rc = ngx_http_read_client_request_body(r, ngx_http_r4x_foreach_directives);
         
         if (rc >= NGX_HTTP_SPECIAL_RESPONSE)
             return rc;

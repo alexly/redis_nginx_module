@@ -27,7 +27,7 @@ static void* ngx_http_r4x_create_loc_conf(ngx_conf_t *cf);
 static char *ngx_http_r4x_exec_handler_init(ngx_conf_t *cf, ngx_command_t *cmd, void *conf);
 static char *ngx_http_r4x_exec_return_handler_init(ngx_conf_t *cf, ngx_command_t *cmd, void *conf);
 ngx_int_t ngx_http_r4x_exec_handler(ngx_http_request_t *r);
-void ngx_http_r4x_exec_return_callback(redisAsyncContext *c, void *repl, void *privdata);
+void ngx_http_r4x_process_redis_reply(redisAsyncContext *c, void *repl, void *privdata);
 
 static ngx_command_t  ngx_http_r4x_commands[] = {
     {	ngx_string("redis_host"),
@@ -158,7 +158,7 @@ static char *ngx_http_r4x_exec_return_handler_init(ngx_conf_t *cf, ngx_command_t
     }
     
     directive = ngx_array_push(&loc_conf->directives);
-    directive->process_reply = ngx_http_r4x_exec_return_callback;
+    directive->process_reply = ngx_http_r4x_process_redis_reply;
     directive->require_json_field = 0;
     
     srv_conf = ngx_http_conf_get_module_srv_conf(cf, ngx_http_r4x_module);
