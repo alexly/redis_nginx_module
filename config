@@ -2,25 +2,18 @@ ngx_addon_name=ngx_http_r4x_module
 HTTP_MODULES="$HTTP_MODULES ngx_http_r4x_module"
 NGX_ADDON_SRCS="$NGX_ADDON_SRCS $ngx_addon_dir/ngx_http_r4x_redis_adapter.c 
                 $ngx_addon_dir/ngx_http_r4x_redis_cluster.c
-                $ngx_addon_dir/ngx_http_r4x_json_adapter.c 
                 $ngx_addon_dir/ngx_http_r4x_module.c 
                 $ngx_addon_dir/ngx_http_r4x_utils.c 
                 $ngx_addon_dir/ngx_http_r4x_handler.c 
                 $ngx_addon_dir/ngx_http_r4x_directive.c 
+                $ngx_addon_dir/ngx_http_r4x_json.c 
                 $ngx_addon_dir/sha1.c 
                 $ngx_addon_dir/hiredis/sds.c
                 $ngx_addon_dir/hiredis/net.c 
                 $ngx_addon_dir/hiredis/dict.c 
                 $ngx_addon_dir/hiredis/hiredis.c 
-                $ngx_addon_dir/hiredis/async.c  
-                $ngx_addon_dir/yajl/yajl.c 
-                $ngx_addon_dir/yajl/yajl_alloc.c 
-                $ngx_addon_dir/yajl/yajl_buf.c 
-                $ngx_addon_dir/yajl/yajl_encode.c 
-                $ngx_addon_dir/yajl/yajl_gen.c  
-                $ngx_addon_dir/yajl/yajl_lex.c 
-                $ngx_addon_dir/yajl/yajl_parser.c 
-                $ngx_addon_dir/yajl/yajl_tree.c 
+                $ngx_addon_dir/hiredis/async.c 
+                $ngx_addon_dir/js0n/js0n.c 
                 "
 
 NGX_ADDON_DEPS="$NGX_ADDON_DEPS $ngx_addon_dir/ngx_http_r4x_module.h"

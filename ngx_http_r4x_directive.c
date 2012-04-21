@@ -25,10 +25,10 @@ static ngx_str_t  evalsha_command_name = ngx_string("evalsha");
 
 static char *
 ngx_http_r4x_add_directive_argument(ngx_conf_t *cf, ngx_http_r4x_directive_t *directive, 
-        ngx_str_t *raw_arg, ngx_uint_t index)
+        ngx_str_t *raw_arg, ngx_http_r4x_loc_conf_t * loc_conf)
 {
     ngx_http_compile_complex_value_t    ccv;
-    ngx_http_r4x_directive_arg_t        *directive_arg = ngx_array_push(&directive->arguments_metadata);
+    ngx_http_r4x_directive_arg_t        *directive_arg = ngx_array_push(&directive->arguments);
     
     switch(raw_arg->data[0])
     {
@@ -48,8 +48,9 @@ ngx_http_r4x_add_directive_argument(ngx_conf_t *cf, ngx_http_r4x_directive_t *di
             break;
             
         case '@': // json field(from request body)
-            directive_arg->type = REDIS4NGINX_JSON_FIELD_ARG;
-            directive->require_json_field = 1;
+            directive_arg->type = REDIS4NGINX_JSON_FIELD_NAME_ARG;
+            directive->require_json_field       = 1;
+            loc_conf->require_json_field        = 1;
             ngx_http_r4x_copy_str(&directive_arg->value,  raw_arg, 1, raw_arg->len - 1, cf->pool);
             break;
 
@@ -72,10 +73,10 @@ ngx_http_r4x_compile_directive(ngx_conf_t *cf, ngx_http_r4x_loc_conf_t * loc_con
     
     value = cf->args->elts;
     
-    directive->raw_redis_argvs = ngx_palloc(cf->pool, sizeof(const char *) * (cf->args->nelts - 1));
-    directive->raw_redis_argv_lens = ngx_palloc(cf->pool, sizeof(size_t) * (cf->args->nelts - 1));
+    directive->cmd_argvs = ngx_palloc(cf->pool, sizeof(const char *) * (cf->args->nelts - 1));
+    directive->cmd_argv_lens = ngx_palloc(cf->pool, sizeof(size_t) * (cf->args->nelts - 1));
     
-    if(ngx_array_init(&directive->arguments_metadata, 
+    if(ngx_array_init(&directive->arguments, 
             cf->pool, cf->args->nelts - 1,  sizeof(ngx_http_r4x_directive_arg_t)) != NGX_OK) {
         return NGX_CONF_ERROR;
     }
@@ -90,7 +91,7 @@ ngx_http_r4x_compile_directive(ngx_conf_t *cf, ngx_http_r4x_loc_conf_t * loc_con
         // evalsha command
         ngx_http_r4x_add_directive_argument(cf, directive, &evalsha_command_name, 0);
         // sha1 script
-        ngx_http_r4x_add_directive_argument(cf, directive, &hash, 1);
+        ngx_http_r4x_add_directive_argument(cf, directive, &hash, loc_conf);
                 
         if(srv_conf->startup_scripts == NULL)
             srv_conf->startup_scripts = ngx_array_create(cf->pool, 10, sizeof(ngx_str_t));
@@ -100,79 +101,8 @@ ngx_http_r4x_compile_directive(ngx_conf_t *cf, ngx_http_r4x_loc_conf_t * loc_con
     }
     
     for (i = skip_args; i < cf->args->nelts; i++)
-        if(ngx_http_r4x_add_directive_argument(cf, directive, &value[i], i-1) != NGX_CONF_OK)
+        if(ngx_http_r4x_add_directive_argument(cf, directive, &value[i], loc_conf) != NGX_CONF_OK)
             return NGX_CONF_ERROR;
     
     return NGX_CONF_OK;
-}
-
-ngx_int_t 
-ngx_http_r4x_get_directive_argument_value(ngx_http_request_t *r, 
-        ngx_http_r4x_directive_arg_t *arg, char **out, size_t *len, ngx_hash_t* json_fiels_hash)
-{
-    ngx_str_t           value;
-    ngx_uint_t          hash_key;
-    ngx_str_t          *find;
-    
-    switch(arg->type)
-    {
-        case REDIS4NGINX_JSON_FIELD_ARG:
-            // find required json field
-            if(json_fiels_hash != NULL) {
-                hash_key = ngx_hash_strlow(arg->value.data, arg->value.data, arg->value.len);
-                find = (ngx_str_t*) ngx_hash_find(json_fiels_hash,  hash_key, arg->value.data, arg->value.len);
-                
-                if(find) {
-                    *out = (char*)find->data;
-                    *len = find->len;
-                    return NGX_OK;
-                }
-            }
-
-            *out = "nil";
-            *len = 3;
-            break;
-        case REDIS4NGINX_COMPILIED_ARG:
-            if (ngx_http_complex_value(r, arg->compilied, &value) != NGX_OK)
-                return NGX_ERROR;
-            
-            *out = (char*)value.data;
-            *len = value.len;
-            break;
-        case REDIS4NGINX_STRING_ARG:
-            *out = (char*)arg->value.data;
-            *len = arg->value.len;
-            break;
-    };
-    
-    return NGX_OK;
-}
-
-ngx_int_t 
-ngx_http_r4x_redis_query(ngx_http_request_t *r, 
-        ngx_http_r4x_directive_t *directive, ngx_hash_t *json_fields_hash)
-{
-    ngx_uint_t                      i;
-    ngx_http_r4x_directive_arg_t    *directive_arg;
-    
-    directive_arg = directive->arguments_metadata.elts;
-    
-    // prepare arguments
-    for (i = 0; i <= directive->arguments_metadata.nelts - 1; i++)
-    {
-        if(ngx_http_r4x_get_directive_argument_value(r, &directive_arg[i], 
-                &directive->raw_redis_argvs[i], &directive->raw_redis_argv_lens[i],
-                json_fields_hash) != NGX_OK)
-        {
-            return NGX_HTTP_INTERNAL_SERVER_ERROR;
-        }
-    }
-                
-    if(ngx_http_r4x_async_command_argv(directive->process_reply, r,  directive->arguments_metadata.nelts, 
-                                    directive->raw_redis_argvs, directive->raw_redis_argv_lens) != NGX_OK)
-    {
-        return NGX_ERROR;
-    }
-    
-    return NGX_OK;
 }

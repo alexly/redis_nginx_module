@@ -44,7 +44,7 @@ static ngx_command_t  ngx_http_r4x_commands[] = {
         offsetof(ngx_http_r4x_srv_conf_t, port),
         NULL },
         
-    {	ngx_string("redis_startup_script"),
+    {	ngx_string("redis_common_script"),
         NGX_HTTP_SRV_CONF|NGX_HTTP_MAIN_CONF|NGX_CONF_TAKE1,
         ngx_conf_set_str_slot,
         NGX_HTTP_SRV_CONF_OFFSET,

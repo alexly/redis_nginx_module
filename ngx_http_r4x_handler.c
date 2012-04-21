@@ -45,42 +45,50 @@ ngx_http_r4x_process_redis_reply(redisAsyncContext *c, void *repl, void *privdat
 }
 
 static ngx_int_t 
-ngx_http_r4x_process_directive(ngx_http_request_t *r, ngx_http_r4x_directive_t *directive)
+ngx_http_r4x_process_directive(ngx_http_request_t *r, 
+        ngx_http_r4x_directive_t *directive, ngx_http_r4x_parsed_json *parsed)
 {
     ngx_uint_t                      i;
-    ngx_array_t                     *json_fields_hashes = NULL;
-    ngx_hash_t                      *json_fields_hash   = NULL;
-        
-    if(directive->arguments_metadata.nelts > 0)
+    ngx_str_t                       temp;
+    ngx_http_r4x_directive_arg_t    *directive_arg;
+    
+    directive_arg = directive->arguments.elts;
+    
+    if(directive->arguments.nelts > 0)
     {
-        if(r->request_body != NULL) {
-            
-            // parse request body
-            if(ngx_http_r4x_parse_request_body_as_json(r) != NGX_OK)
-                return NGX_HTTP_INTERNAL_SERVER_ERROR;
-            
-            // get parsed json fields
-            json_fields_hashes = ngx_http_r4x_get_parser_json();
-        }
-
-        if(json_fields_hashes != NULL) {
-            json_fields_hash = json_fields_hashes->elts;
-
-            for (i = 0; i <= json_fields_hashes->nelts - 1; i++)
-            {                
-                if(ngx_http_r4x_redis_query(r, directive, &json_fields_hash[i]) != NGX_OK)
-                    return NGX_HTTP_INTERNAL_SERVER_ERROR;
-                
-                if(!directive->require_json_field) 
+        // prepare none json arguments
+        for (i = 0; i <= directive->arguments.nelts - 1; i++)
+        {            
+            switch(directive_arg[i].type)
+            {
+                case REDIS4NGINX_JSON_FIELD_INDEX_ARG:
+                    if(ngx_http_r4x_find_by_index(parsed, directive_arg[i].index, &temp) != NGX_OK)
+                        return NGX_ERROR;
                     break;
-            }
+                case REDIS4NGINX_JSON_FIELD_NAME_ARG:
+                    if(ngx_http_r4x_find_by_key(parsed, &directive_arg[i].value, &temp) != NGX_OK)
+                        return NGX_ERROR;
+                    break;
+                case REDIS4NGINX_COMPILIED_ARG:
+                    if (ngx_http_complex_value(r, directive_arg[i].compilied, &temp) != NGX_OK)
+                        return NGX_ERROR;
+                    break;
+                case REDIS4NGINX_STRING_ARG:
+                    temp.data = directive_arg[i].value.data;
+                    temp.len = directive_arg[i].value.len;
+                    break;
+            };
             
-            return NGX_OK;
+            directive->cmd_argvs[i] = (char*)temp.data;
+            directive->cmd_argv_lens[i] = temp.len;
         }
     }
     
-    if(ngx_http_r4x_redis_query(r, directive, NULL) != NGX_OK)
-        return NGX_HTTP_INTERNAL_SERVER_ERROR;
+    if(ngx_http_r4x_async_command_argv(directive->process_reply, r,  directive->arguments.nelts, 
+                                    directive->cmd_argvs, directive->cmd_argv_lens) != NGX_OK)
+    {
+        return NGX_ERROR;
+    }
     
     return NGX_OK;
 }
@@ -88,20 +96,28 @@ ngx_http_r4x_process_directive(ngx_http_request_t *r, ngx_http_r4x_directive_t *
 static void
 ngx_http_r4x_foreach_directives(ngx_http_request_t *r)
 {
-    ngx_http_r4x_loc_conf_t *loc_conf;
-    ngx_http_r4x_directive_t *directive;
-    ngx_uint_t i, directive_count;
-    
+    ngx_http_r4x_loc_conf_t     *loc_conf;
+    ngx_http_r4x_directive_t    *directive;
+    ngx_uint_t                  i, directive_count;
+    ngx_http_r4x_parsed_json    parsed_json;
+
     loc_conf = ngx_http_get_module_loc_conf(r, ngx_http_r4x_module);
 
     directive = loc_conf->directives.elts;
     directive_count = loc_conf->directives.nelts;
     
-    if(directive_count > 0) 
+    if(loc_conf->require_json_field) {
+        if(ngx_http_r4x_parse_json_request_body(r, &parsed_json) != NGX_OK) {
+            ngx_http_finalize_request(r, NGX_HTTP_INTERNAL_SERVER_ERROR);
+            return;
+        }
+    }
+    
+    if(directive_count > 0)
     {
         for (i = 0; i <= directive_count - 1; i++)
         {
-            if(ngx_http_r4x_process_directive(r, &directive[i]) != NGX_OK)
+            if(ngx_http_r4x_process_directive(r, &directive[i], &parsed_json) != NGX_OK)
             {
                 ngx_http_finalize_request(r, NGX_HTTP_INTERNAL_SERVER_ERROR);
                 return;
