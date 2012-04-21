@@ -36,6 +36,15 @@ static void ngx_http_r4x_add_write(void *privdata);
 static void ngx_http_r4x_del_write(void *privdata);
 static void ngx_http_r4x_cleanup(void *privdata);
 
+void ngx_http_r4x_process_reply(redisAsyncContext *c, void *repl, void *privdata)
+{
+    redisReply* rr = repl;
+    if(rr) {
+        rr->integer++;
+        return;
+    }
+}
+
 ngx_int_t ngx_http_r4x_init_connection(ngx_http_r4x_srv_conf_t *serv_conf)
 {    
     //TODO: connection timeout shoul be added by ngx_add_timer or native hiredis
@@ -94,14 +103,15 @@ ngx_int_t ngx_http_r4x_init_connection(ngx_http_r4x_srv_conf_t *serv_conf)
         
         // load all scripts to redis db
         
-        if(serv_conf->startup_script.len > 0)
-            ngx_http_r4x_async_command(NULL, NULL, "eval %b 0", serv_conf->startup_script.data, serv_conf->startup_script.len);
+        if(serv_conf->common_script.len > 0)
+            ngx_http_r4x_async_command(NULL, NULL, "eval %b 0", serv_conf->common_script.data, serv_conf->common_script.len);
         
-        if(serv_conf->startup_scripts != NULL)  {
-            script = serv_conf->startup_scripts->elts;
+        if(serv_conf->eval_scripts != NULL)  {
+            script = serv_conf->eval_scripts->elts;
             
-            for(i=0; i < serv_conf->startup_scripts->nelts; i++)
-                ngx_http_r4x_async_command(NULL, NULL, "eval %b 0", (&script[i])->data, (&script[i])->len);
+            for(i=0; i < serv_conf->eval_scripts->nelts; i++)
+                // TODO: change eval to load script
+                ngx_http_r4x_async_command(ngx_http_r4x_process_reply, NULL, "eval %b 0", (&script[i])->data, (&script[i])->len);
         }
     }
 

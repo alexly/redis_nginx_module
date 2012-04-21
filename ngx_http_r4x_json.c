@@ -48,28 +48,28 @@ ngx_http_r4x_find_by_key(ngx_http_r4x_parsed_json *parsed, ngx_str_t *key, ngx_s
 {
     ngx_uint_t i, len;
     u_char* data;    
-    
-	for(i=0;parsed->offsets_lengths[i];i+=2)
-	{
+
+    for(i=0;parsed->offsets_lengths[i];i+=2)
+    {
         //printf("%d: at %d len %d is %.*s\n",i,res[i],res[i+1],res[i+1],json+res[i]);
-        
+
         data = parsed->json_body + parsed->offsets_lengths[i];
         len = parsed->offsets_lengths[i+1];
-        
+
         if(len != key->len)
-            continue;
-        
+        continue;
+
         if(ngx_strncmp(key->data, data, key->len) == 0) {
             i+=2;
             value->data = parsed->json_body + parsed->offsets_lengths[i];
             value->len = parsed->offsets_lengths[i+1];
             return NGX_OK;
         }
-	}
-    
+    }
+
     value->data = ngx_http_r4x_nil_json_field;
     value->len = ngx_http_r4x_nil_json_field_len;
-    
+
     return NGX_OK;
 }
 

@@ -66,8 +66,10 @@ typedef struct {
 typedef struct {
     ngx_str_t                           host;
     ngx_int_t                           port;
-    ngx_str_t                           startup_script;
-    ngx_array_t                         *startup_scripts;
+    
+    ngx_str_t                           common_script;
+    ngx_str_t                           common_script_file_name;
+    ngx_array_t                         *eval_scripts;
 } ngx_http_r4x_srv_conf_t;
 
 typedef struct {

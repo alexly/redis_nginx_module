@@ -93,10 +93,10 @@ ngx_http_r4x_compile_directive(ngx_conf_t *cf, ngx_http_r4x_loc_conf_t * loc_con
         // sha1 script
         ngx_http_r4x_add_directive_argument(cf, directive, &hash, loc_conf);
                 
-        if(srv_conf->startup_scripts == NULL)
-            srv_conf->startup_scripts = ngx_array_create(cf->pool, 10, sizeof(ngx_str_t));
+        if(srv_conf->eval_scripts == NULL)
+            srv_conf->eval_scripts = ngx_array_create(cf->pool, 10, sizeof(ngx_str_t));
         
-        script = ngx_array_push(srv_conf->startup_scripts);
+        script = ngx_array_push(srv_conf->eval_scripts);
         ngx_http_r4x_copy_str(script, &value[2], 0, (&value[2])->len, cf->pool);
     }
     
