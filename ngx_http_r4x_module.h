@@ -59,16 +59,32 @@ typedef struct {
 } ngx_http_r4x_directive_t;
 
 typedef struct {
+    redisAsyncContext                   *context;
+    ngx_connection_t                    *conn;
+    
+    unsigned                            connected:1;
+    unsigned                            master_node:1;
+    
+    char*                               host;
+    ngx_int_t                           port;
+    
+    ngx_str_t                           *common_script;
+    ngx_array_t                         *eval_scripts;
+} ngx_http_r4x_redis_node_t;
+
+typedef struct {
     ngx_array_t                         directives;
     unsigned                            require_json_field:1;
 } ngx_http_r4x_loc_conf_t;
 
 typedef struct {
+    ngx_http_r4x_redis_node_t           *master;
+    ngx_array_t                         *slaves;
+    
     ngx_str_t                           host;
     ngx_int_t                           port;
-    
+        
     ngx_str_t                           common_script;
-    ngx_str_t                           common_script_file_name;
     ngx_array_t                         *eval_scripts;
 } ngx_http_r4x_srv_conf_t;
 
@@ -77,56 +93,33 @@ typedef struct {
     unsigned                            wait_read_body:1;
 } ngx_http_r4x_request_ctx;
 
-typedef struct {
-    redisAsyncContext                   *async;
-    ngx_connection_t                    *conn;
-    unsigned                            connected:1;
-    unsigned                            master_node:1;
-    char*                               host;
-    ngx_int_t                           port;
-} ngx_http_r4x_redis_node_t;
 
-// Redis DB API:
-ngx_int_t
-ngx_http_r4x_init_connection(ngx_http_r4x_srv_conf_t *serv_conf);
+ngx_int_t ngx_http_r4x_init_connection(ngx_http_r4x_redis_node_t *node);
 
-ngx_int_t
-ngx_http_r4x_async_command(redisCallbackFn *fn, void *privdata, const char *format, ...);
+ngx_int_t ngx_http_r4x_async_command(ngx_http_r4x_redis_node_t *node, redisCallbackFn *fn, 
+        void *privdata, const char *format, ...);
 
-ngx_int_t
-ngx_http_r4x_async_command_argv(redisCallbackFn *fn, void *privdata, 
-                            int argc, char **argv, const size_t *argvlen);
+ngx_int_t ngx_http_r4x_async_command_argv(ngx_http_r4x_redis_node_t *node, redisCallbackFn *fn, 
+        void *privdata, int argc, char **argv, const size_t *argvlen);
 
-// HTTP utilities:
-void
-ngx_http_r4x_send_redis_reply(ngx_http_request_t *r, redisAsyncContext *c, 
+void ngx_http_r4x_send_redis_reply(ngx_http_request_t *r, redisAsyncContext *c, 
                             redisReply *reply);
 
-// Directive utilities:
-
-char *
-ngx_http_r4x_compile_directive(ngx_conf_t *cf, ngx_http_r4x_loc_conf_t * loc_conf, 
+char * ngx_http_r4x_compile_directive(ngx_conf_t *cf, ngx_http_r4x_loc_conf_t * loc_conf, 
         ngx_http_r4x_srv_conf_t *srv_conf, ngx_http_r4x_directive_t *directive);
 
-// Json utilities:
-ngx_int_t
-ngx_http_r4x_parse_json_request_body(ngx_http_request_t *r, ngx_http_r4x_parsed_json* parsed);
+ngx_int_t ngx_http_r4x_parse_json_request_body(ngx_http_request_t *r, ngx_http_r4x_parsed_json* parsed);
 
-ngx_int_t
-ngx_http_r4x_find_by_key(ngx_http_r4x_parsed_json *parsed, ngx_str_t *key, ngx_str_t *value);
+ngx_int_t ngx_http_r4x_find_by_key(ngx_http_r4x_parsed_json *parsed, ngx_str_t *key, ngx_str_t *value);
 
-ngx_int_t
-ngx_http_r4x_find_by_index(ngx_http_r4x_parsed_json *parsed, ngx_uint_t index, ngx_str_t *value);
+ngx_int_t ngx_http_r4x_find_by_index(ngx_http_r4x_parsed_json *parsed, ngx_uint_t index, ngx_str_t *value);
 
-// String utilities:
-void
-ngx_http_r4x_hash_script(ngx_str_t *digest, ngx_str_t *script);
+void ngx_http_r4x_sha1(ngx_str_t *digest, ngx_str_t *script);
 
-char *
-ngx_http_r4x_string_to_c_string(ngx_str_t *str, ngx_pool_t *pool);
+// len - without '\0'
+char* ngx_http_r4x_create_cstr_by_ngxstr(ngx_pool_t *pool, ngx_str_t *source, size_t offset, size_t len);
 
-ngx_int_t 
-ngx_http_r4x_copy_str(ngx_str_t *dest, ngx_str_t *src, size_t offset, 
-        size_t len, ngx_pool_t *pool);
+ngx_int_t ngx_http_r4x_copy_ngxstr(ngx_pool_t *pool, ngx_str_t *dest, 
+        ngx_str_t *src, size_t offset, size_t len);
 
 #endif

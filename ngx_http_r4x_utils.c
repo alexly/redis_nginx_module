@@ -114,7 +114,7 @@ ngx_http_r4x_send_redis_reply(ngx_http_request_t *r, redisAsyncContext *c, redis
 /* Hash the scripit into a SHA1 digest. We use this as Lua function name.
  * Digest should point to a 41 bytes buffer: 40 for SHA1 converted into an
  * hexadecimal number, plus 1 byte for null term. */
-void ngx_http_r4x_hash_script(ngx_str_t *digest, ngx_str_t *script) {
+void ngx_http_r4x_sha1(ngx_str_t *digest, ngx_str_t *script) {
     SHA1_CTX ctx;
     unsigned char hash[20];
     char *cset = "0123456789abcdef";
@@ -133,21 +133,24 @@ void ngx_http_r4x_hash_script(ngx_str_t *digest, ngx_str_t *script) {
 }
 
 char* 
-ngx_http_r4x_string_to_c_string(ngx_str_t *str, ngx_pool_t *pool)
+ngx_http_r4x_create_cstr_by_ngxstr(ngx_pool_t *pool, ngx_str_t *source, size_t offset, size_t len)
 {
+    ngx_pool_t *use_pool;
     char* result = NULL;
-    if(str != NULL && str->len > 0) 
+    use_pool = pool == NULL ? ngx_cycle->pool : pool;
+    
+    if(source != NULL && source->len > 0)
     {
-        result = ngx_palloc(pool == NULL ? ngx_cycle->pool : pool, str->len + 1);
-        memcpy(result, str->data, str->len);
-        result[str->len] = '\0';   
+        result = ngx_palloc(use_pool, len + 1);
+        memcpy(result, source->data+offset, len);
+        result[len] = '\0';   
     }
     
     return result;
 }
 
 ngx_int_t 
-ngx_http_r4x_copy_str(ngx_str_t *dest, ngx_str_t *src, size_t offset, size_t len, ngx_pool_t *pool)
+ngx_http_r4x_copy_ngxstr(ngx_pool_t *pool, ngx_str_t *dest, ngx_str_t *src, size_t offset, size_t len)
 {
     ngx_pool_t *use_pool;
     use_pool = pool == NULL ? ngx_cycle->pool : pool;

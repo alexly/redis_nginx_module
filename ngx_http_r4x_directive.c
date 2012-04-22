@@ -51,12 +51,12 @@ ngx_http_r4x_add_directive_argument(ngx_conf_t *cf, ngx_http_r4x_directive_t *di
             directive_arg->type = REDIS4NGINX_JSON_FIELD_NAME_ARG;
             directive->require_json_field       = 1;
             loc_conf->require_json_field        = 1;
-            ngx_http_r4x_copy_str(&directive_arg->value,  raw_arg, 1, raw_arg->len - 1, cf->pool);
+            ngx_http_r4x_copy_ngxstr(cf->pool, &directive_arg->value,  raw_arg, 1, raw_arg->len - 1);
             break;
 
         default:
             directive_arg->type = REDIS4NGINX_STRING_ARG;
-            ngx_http_r4x_copy_str(&directive_arg->value, raw_arg, 0, raw_arg->len, cf->pool);
+            ngx_http_r4x_copy_ngxstr(cf->pool, &directive_arg->value, raw_arg, 0, raw_arg->len);
             break;
     };
  
@@ -86,7 +86,7 @@ ngx_http_r4x_compile_directive(ngx_conf_t *cf, ngx_http_r4x_loc_conf_t * loc_con
         // skip eval beacause actual we use evalsha, and lua script, beacause it should not be compiled
         skip_args = 3;
         hash.data = ngx_palloc(cf->pool, 40);
-        ngx_http_r4x_hash_script(&hash, &value[2]);
+        ngx_http_r4x_sha1(&hash, &value[2]);
         
         // evalsha command
         ngx_http_r4x_add_directive_argument(cf, directive, &evalsha_command_name, 0);
@@ -97,7 +97,7 @@ ngx_http_r4x_compile_directive(ngx_conf_t *cf, ngx_http_r4x_loc_conf_t * loc_con
             srv_conf->eval_scripts = ngx_array_create(cf->pool, 10, sizeof(ngx_str_t));
         
         script = ngx_array_push(srv_conf->eval_scripts);
-        ngx_http_r4x_copy_str(script, &value[2], 0, (&value[2])->len, cf->pool);
+        ngx_http_r4x_copy_ngxstr(cf->pool, script, &value[2], 0, (&value[2])->len);
     }
     
     for (i = skip_args; i < cf->args->nelts; i++)

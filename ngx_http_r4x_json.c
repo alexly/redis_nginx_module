@@ -57,12 +57,11 @@ ngx_http_r4x_find_by_key(ngx_http_r4x_parsed_json *parsed, ngx_str_t *key, ngx_s
         len = parsed->offsets_lengths[i+1];
 
         if(len != key->len)
-        continue;
+            continue;
 
         if(ngx_strncmp(key->data, data, key->len) == 0) {
-            i+=2;
-            value->data = parsed->json_body + parsed->offsets_lengths[i];
-            value->len = parsed->offsets_lengths[i+1];
+            value->data = parsed->json_body + parsed->offsets_lengths[i+2];
+            value->len = parsed->offsets_lengths[i+3];
             return NGX_OK;
         }
     }
