@@ -56,18 +56,16 @@ typedef struct {
     size_t                              *cmd_argv_lens;
     redisCallbackFn                     *process_reply;
     unsigned                            require_json_field:1;
+    unsigned                            read_only:1;
 } ngx_http_r4x_directive_t;
 
 typedef struct {
     redisAsyncContext                   *context;
     ngx_connection_t                    *conn;
-    
     unsigned                            connected:1;
     unsigned                            master_node:1;
-    
     char*                               host;
     ngx_int_t                           port;
-    
     ngx_str_t                           *common_script;
     ngx_array_t                         *eval_scripts;
 } ngx_http_r4x_redis_node_t;
@@ -80,6 +78,7 @@ typedef struct {
 typedef struct {
     ngx_http_r4x_redis_node_t           *master;
     ngx_array_t                         *slaves;
+    unsigned                            cluster_initialized:1;
     ngx_str_t                           common_script;
     ngx_array_t                         *eval_scripts;
 } ngx_http_r4x_srv_conf_t;
@@ -91,35 +90,18 @@ typedef struct {
 
 
 ngx_int_t ngx_http_r4x_init_connection(ngx_http_r4x_redis_node_t *node);
-
-ngx_int_t ngx_http_r4x_async_command(ngx_http_r4x_redis_node_t *node, redisCallbackFn *fn, 
-        void *privdata, const char *format, ...);
-
-ngx_int_t ngx_http_r4x_async_command_argv(ngx_http_r4x_redis_node_t *node, redisCallbackFn *fn, 
-        void *privdata, int argc, char **argv, const size_t *argvlen);
-
-ngx_int_t ngx_http_r4x_lazy_configure_redis_cluster_nodes(ngx_http_r4x_srv_conf_t *srv_conf);
-
-void ngx_http_r4x_send_redis_reply(ngx_http_request_t *r, redisAsyncContext *c, 
-                            redisReply *reply);
-
-char * ngx_http_r4x_compile_directive(ngx_conf_t *cf, ngx_http_r4x_loc_conf_t * loc_conf, 
-        ngx_http_r4x_srv_conf_t *srv_conf, ngx_http_r4x_directive_t *directive);
-
+ngx_int_t ngx_http_r4x_async_command(ngx_http_r4x_redis_node_t *node, redisCallbackFn *fn, void *privdata, const char *format, ...);
+ngx_int_t ngx_http_r4x_async_command_argv(ngx_http_r4x_redis_node_t *node, redisCallbackFn *fn, void *privdata, int argc, char **argv, const size_t *argvlen);
+ngx_int_t ngx_http_r4x_get_read_write_node(ngx_http_request_t *r, ngx_http_r4x_redis_node_t **node);
+ngx_int_t ngx_http_r4x_get_read_only_node(ngx_http_request_t *r, ngx_http_r4x_redis_node_t **node);
+void ngx_http_r4x_send_redis_reply(ngx_http_request_t *r, redisAsyncContext *c, redisReply *reply);
+char * ngx_http_r4x_compile_directive(ngx_conf_t *cf, ngx_http_r4x_loc_conf_t * lcf, ngx_http_r4x_srv_conf_t *scf, ngx_http_r4x_directive_t *d);
 ngx_int_t ngx_http_r4x_parse_json_request_body(ngx_http_request_t *r, ngx_http_r4x_parsed_json* parsed);
-
 ngx_int_t ngx_http_r4x_find_by_key(ngx_http_r4x_parsed_json *parsed, ngx_str_t *key, ngx_str_t *value);
-
 ngx_int_t ngx_http_r4x_find_by_index(ngx_http_r4x_parsed_json *parsed, ngx_uint_t index, ngx_str_t *value);
-
 void ngx_http_r4x_sha1(ngx_str_t *digest, ngx_str_t *script);
-
-// len - without '\0'
 char* ngx_http_r4x_create_cstr_by_ngxstr(ngx_pool_t *pool, ngx_str_t *source, size_t offset, size_t len);
-
-ngx_int_t ngx_http_r4x_copy_ngxstr(ngx_pool_t *pool, ngx_str_t *dest, 
-        ngx_str_t *src, size_t offset, size_t len);
-
+ngx_int_t ngx_http_r4x_copy_ngxstr(ngx_pool_t *pool, ngx_str_t *dest,  ngx_str_t *src, size_t offset, size_t len);
 char* ngx_http_r4x_read_conf_file(ngx_conf_t *cf, ngx_str_t *file_path, ngx_str_t *buff);
 
 #endif

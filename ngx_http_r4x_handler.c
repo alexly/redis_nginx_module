@@ -21,6 +21,12 @@
 #include "ddebug.h"
 #include "ngx_http_r4x_module.h"
 
+#define HTTP_500_IF_NOT_NGX_OK(code) \
+    if(code != NGX_OK) { \
+        ngx_http_finalize_request(r, NGX_HTTP_INTERNAL_SERVER_ERROR); \
+        return; \
+    } \
+    
 void 
 ngx_http_r4x_process_redis_reply(redisAsyncContext *c, void *repl, void *privdata)
 {
@@ -30,8 +36,11 @@ ngx_http_r4x_process_redis_reply(redisAsyncContext *c, void *repl, void *privdat
     
     ctx = ngx_http_get_module_ctx(r, ngx_http_r4x_module);
     
-    if(rr == NULL) // TODO: logging connection to redis db is lost
+    if(rr == NULL) { 
+        // TODO: logging connection to redis db is lost
         ngx_http_finalize_request(r, NGX_HTTP_INTERNAL_SERVER_ERROR);
+        return;
+    }
     
     if(!ctx->completed) 
     {
@@ -45,8 +54,8 @@ ngx_http_r4x_process_redis_reply(redisAsyncContext *c, void *repl, void *privdat
 }
 
 static ngx_int_t 
-ngx_http_r4x_process_directive(ngx_http_request_t *r, ngx_http_r4x_directive_t *directive, 
-        ngx_http_r4x_parsed_json *parsed, ngx_http_r4x_redis_node_t *node)
+ngx_http_r4x_prepare_directive_arguments(ngx_http_request_t *r, 
+        ngx_http_r4x_directive_t *directive, ngx_http_r4x_parsed_json *parsed)
 {
     ngx_uint_t                      i;
     ngx_str_t                       temp;
@@ -84,30 +93,21 @@ ngx_http_r4x_process_directive(ngx_http_request_t *r, ngx_http_r4x_directive_t *
         }
     }
     
-    if(ngx_http_r4x_async_command_argv(node, directive->process_reply, r,  directive->arguments.nelts, 
-                                    directive->cmd_argvs, directive->cmd_argv_lens) != NGX_OK)
-    {
-        return NGX_ERROR;
-    }
-    
     return NGX_OK;
 }
 
 static void
-ngx_http_r4x_foreach_directives(ngx_http_request_t *r)
+ngx_http_r4x_run_directives(ngx_http_request_t *r)
 {
+    ngx_uint_t                  i;
     ngx_http_r4x_loc_conf_t     *loc_conf;
     ngx_http_r4x_directive_t    *directive;
-    ngx_uint_t                  i, directive_count;
     ngx_http_r4x_parsed_json    parsed_json;
-    ngx_http_r4x_srv_conf_t     *srv_conf;
+    ngx_http_r4x_redis_node_t   *node;
+            
+    loc_conf    = ngx_http_get_module_loc_conf(r, ngx_http_r4x_module);
     
-    srv_conf = ngx_http_get_module_srv_conf(r, ngx_http_r4x_module);
-    
-    loc_conf = ngx_http_get_module_loc_conf(r, ngx_http_r4x_module);
-
     directive = loc_conf->directives.elts;
-    directive_count = loc_conf->directives.nelts;
     
     if(loc_conf->require_json_field) {
         if(ngx_http_r4x_parse_json_request_body(r, &parsed_json) != NGX_OK) {
@@ -116,16 +116,24 @@ ngx_http_r4x_foreach_directives(ngx_http_request_t *r)
         }
     }
     
-    if(directive_count > 0)
+    for (i = 0; i <= loc_conf->directives.nelts - 1; i++)
     {
-        for (i = 0; i <= directive_count - 1; i++)
-        {
-            if(ngx_http_r4x_process_directive(r, &directive[i], &parsed_json, srv_conf->master) != NGX_OK)
-            {
-                ngx_http_finalize_request(r, NGX_HTTP_INTERNAL_SERVER_ERROR);
-                return;
-            }
+        if(directive[i].read_only) {
+            HTTP_500_IF_NOT_NGX_OK(
+                    ngx_http_r4x_get_read_only_node(r, &node));
         }
+        else {
+            HTTP_500_IF_NOT_NGX_OK(
+                    ngx_http_r4x_get_read_write_node(r, &node));   
+        }
+
+        HTTP_500_IF_NOT_NGX_OK(
+                ngx_http_r4x_prepare_directive_arguments(r, &directive[i], &parsed_json));
+
+        HTTP_500_IF_NOT_NGX_OK(
+            ngx_http_r4x_async_command_argv(node, 
+                directive->process_reply, r,  directive->arguments.nelts, 
+                directive->cmd_argvs, directive->cmd_argv_lens));
     }
 
     r->main->count++;
@@ -134,25 +142,17 @@ ngx_http_r4x_foreach_directives(ngx_http_request_t *r)
 ngx_int_t 
 ngx_http_r4x_exec_handler(ngx_http_request_t *r)
 {
-    ngx_int_t                   rc;
-    ngx_http_r4x_srv_conf_t     *srv_conf;
-    ngx_http_r4x_request_ctx    *ctx;
+    ngx_int_t                       rc;
+    ngx_http_r4x_request_ctx        *ctx;
     
     ctx         = ngx_http_get_module_ctx(r, ngx_http_r4x_module);
-    srv_conf    = ngx_http_get_module_srv_conf(r, ngx_http_r4x_module);
-    
-    if(ngx_http_r4x_lazy_configure_redis_cluster_nodes(srv_conf) != NGX_OK)
-        return NGX_HTTP_INTERNAL_SERVER_ERROR;
-    
+        
     if(ctx == NULL) {
         ctx = ngx_palloc(r->pool, sizeof(ngx_http_r4x_request_ctx));
         ctx->completed = 0;
+        //ctx->node = srv_conf->master;
         ngx_http_set_ctx(r, ctx, ngx_http_r4x_module);
     }
-    
-    // connect to redis db, only if connection is lost
-    if(ngx_http_r4x_init_connection(srv_conf->master) != NGX_OK)
-        return NGX_HTTP_INTERNAL_SERVER_ERROR;
             
     // we response to 'GET'
     if ((r->method & NGX_HTTP_GET)) {
@@ -163,7 +163,7 @@ ngx_http_r4x_exec_handler(ngx_http_request_t *r)
         
         ctx->wait_read_body = 0;
         
-        ngx_http_r4x_foreach_directives(r);
+        ngx_http_r4x_run_directives(r);
         
         return NGX_DONE;
     }
@@ -175,7 +175,7 @@ ngx_http_r4x_exec_handler(ngx_http_request_t *r)
         r->request_body_in_single_buf = 1;
         ctx->wait_read_body = 1;
         
-        rc = ngx_http_read_client_request_body(r, ngx_http_r4x_foreach_directives);
+        rc = ngx_http_read_client_request_body(r, ngx_http_r4x_run_directives);
         
         if (rc >= NGX_HTTP_SPECIAL_RESPONSE)
             return rc;

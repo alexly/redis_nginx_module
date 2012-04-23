@@ -21,7 +21,7 @@
 #include "ddebug.h"
 #include "ngx_http_r4x_module.h"
 
-ngx_int_t ngx_http_r4x_lazy_configure_redis_cluster_nodes(ngx_http_r4x_srv_conf_t *srv_conf)
+static ngx_int_t ngx_http_r4x_lazy_configure_redis_cluster_nodes(ngx_http_r4x_srv_conf_t *srv_conf)
 {
     ngx_uint_t                      i;
     ngx_http_r4x_redis_node_t       *slave;
@@ -30,18 +30,72 @@ ngx_int_t ngx_http_r4x_lazy_configure_redis_cluster_nodes(ngx_http_r4x_srv_conf_
         //TODO: logging "master node does't specified";
         return NGX_ERROR;
     }
-            
-    srv_conf->master->common_script = &srv_conf->common_script;
-    srv_conf->master->eval_scripts          = srv_conf->eval_scripts;
     
-    if(srv_conf->slaves != NULL) {
+    if(!srv_conf->cluster_initialized) {
         
-        slave = srv_conf->slaves->elts;
-        for (i = 0; i <= srv_conf->slaves->nelts - 1; i++) {
-            slave[i].common_script  = &srv_conf->common_script;
-            slave[i].eval_scripts   = srv_conf->eval_scripts;
+        srv_conf->master->common_script = &srv_conf->common_script;
+        srv_conf->master->eval_scripts          = srv_conf->eval_scripts;
+
+        if(srv_conf->slaves != NULL) {
+
+            slave = srv_conf->slaves->elts;
+            for (i = 0; i <= srv_conf->slaves->nelts - 1; i++) {
+                slave[i].common_script  = &srv_conf->common_script;
+                slave[i].eval_scripts   = srv_conf->eval_scripts;
+            }
         }
+
+        srv_conf->cluster_initialized = 1;
+    
     }
+            
+    return NGX_OK;
+}
+
+ngx_int_t ngx_http_r4x_get_read_write_node(ngx_http_request_t *r, ngx_http_r4x_redis_node_t **node)
+{
+    ngx_http_r4x_srv_conf_t         *srv_conf;
+    
+    srv_conf    = ngx_http_get_module_srv_conf(r, ngx_http_r4x_module);
+    
+    if(ngx_http_r4x_lazy_configure_redis_cluster_nodes(srv_conf) != NGX_OK)
+        return NGX_HTTP_INTERNAL_SERVER_ERROR;
+    
+    *node = srv_conf->master;
+    
+    if(ngx_http_r4x_init_connection(*node) != NGX_OK)
+        return NGX_HTTP_INTERNAL_SERVER_ERROR;
+    
+    return NGX_OK;
+}
+
+ngx_int_t ngx_http_r4x_get_read_only_node(ngx_http_request_t *r, ngx_http_r4x_redis_node_t **node)
+{
+    ngx_http_r4x_srv_conf_t         *srv_conf;
+    ngx_http_r4x_redis_node_t       *tmp;
+    static volatile ngx_uint_t      slave_node_index;
+        
+    srv_conf    = ngx_http_get_module_srv_conf(r, ngx_http_r4x_module);
+    
+    if(ngx_http_r4x_lazy_configure_redis_cluster_nodes(srv_conf) != NGX_OK)
+        return NGX_HTTP_INTERNAL_SERVER_ERROR;
+    
+    if(srv_conf->slaves->nelts == 0) {
+        *node = srv_conf->master;
+    }
+    else {
+        slave_node_index++;
+
+        if(slave_node_index >= srv_conf->slaves->nelts)
+            slave_node_index = 0;
+
+        tmp = srv_conf->slaves->elts;
+
+        *node = &tmp[slave_node_index];
+    }
+        
+    if(ngx_http_r4x_init_connection(*node) != NGX_OK)
+        return NGX_HTTP_INTERNAL_SERVER_ERROR;
     
     return NGX_OK;
 }

@@ -56,19 +56,33 @@ static ngx_command_t  ngx_http_r4x_commands[] = {
         0,
         NULL },
 
-    {   ngx_string("redis_exec"),
+    {   ngx_string("redis_read_cmd"),
         NGX_HTTP_LOC_CONF|NGX_HTTP_LIF_CONF|NGX_CONF_ANY,
         ngx_http_r4x_exec_handler_init,
         NGX_HTTP_LOC_CONF_OFFSET,
         0,
         NULL },
         
-    {   ngx_string("redis_exec_return"),
+    {   ngx_string("redis_read_cmd_ret"),
         NGX_HTTP_LOC_CONF|NGX_HTTP_LIF_CONF|NGX_CONF_ANY,
         ngx_http_r4x_exec_return_handler_init,
         NGX_HTTP_LOC_CONF_OFFSET,
         0,
-        NULL },    
+        NULL },
+        
+    {   ngx_string("redis_write_cmd"),
+        NGX_HTTP_LOC_CONF|NGX_HTTP_LIF_CONF|NGX_CONF_ANY,
+        ngx_http_r4x_exec_handler_init,
+        NGX_HTTP_LOC_CONF_OFFSET,
+        0,
+        NULL },
+        
+    {   ngx_string("redis_write_cmd_ret"),
+        NGX_HTTP_LOC_CONF|NGX_HTTP_LIF_CONF|NGX_CONF_ANY,
+        ngx_http_r4x_exec_return_handler_init,
+        NGX_HTTP_LOC_CONF_OFFSET,
+        0,
+        NULL },
     ngx_null_command
 };
 
@@ -110,6 +124,8 @@ static void* ngx_http_r4x_create_srv_conf(ngx_conf_t *cf)
     
     srv_conf = ngx_pcalloc(cf->pool, sizeof(ngx_http_r4x_srv_conf_t));
     
+    srv_conf->cluster_initialized = 0;
+            
     return srv_conf;
 }
 
@@ -151,10 +167,10 @@ static char *ngx_http_r4x_exec_handler_init(ngx_conf_t *cf, ngx_command_t *cmd, 
 
 static char *ngx_http_r4x_exec_return_handler_init(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
 {
-    ngx_http_r4x_loc_conf_t *loc_conf = conf;
     ngx_http_core_loc_conf_t *core_conf;
     ngx_http_r4x_directive_t *directive;
     ngx_http_r4x_srv_conf_t *srv_conf;
+    ngx_http_r4x_loc_conf_t *loc_conf = conf;
     
     core_conf = ngx_http_conf_get_module_loc_conf(cf, ngx_http_core_module);
 

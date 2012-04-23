@@ -73,6 +73,15 @@ ngx_http_r4x_compile_directive(ngx_conf_t *cf, ngx_http_r4x_loc_conf_t * loc_con
     
     value = cf->args->elts;
     
+    if(ngx_memcmp(value[0].data, "redis_read_cmd", value[0].len) == 0
+        ||ngx_memcmp(value[0].data, "redis_read_cmd", value[0].len) == 0) 
+    {    
+        directive->read_only = 1;
+    }
+    else {
+        directive->read_only = 0;
+    } 
+    
     directive->cmd_argvs = ngx_palloc(cf->pool, sizeof(const char *) * (cf->args->nelts - 1));
     directive->cmd_argv_lens = ngx_palloc(cf->pool, sizeof(size_t) * (cf->args->nelts - 1));
     
