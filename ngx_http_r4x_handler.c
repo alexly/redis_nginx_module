@@ -136,9 +136,13 @@ ngx_http_r4x_exec_handler(ngx_http_request_t *r)
 {
     ngx_int_t                   rc;
     ngx_http_r4x_srv_conf_t     *srv_conf;
-    ngx_http_r4x_request_ctx    *ctx = ngx_http_get_module_ctx(r, ngx_http_r4x_module);
+    ngx_http_r4x_request_ctx    *ctx;
     
-    srv_conf = ngx_http_get_module_srv_conf(r, ngx_http_r4x_module);
+    ctx         = ngx_http_get_module_ctx(r, ngx_http_r4x_module);
+    srv_conf    = ngx_http_get_module_srv_conf(r, ngx_http_r4x_module);
+    
+    if(ngx_http_r4x_lazy_configure_redis_cluster_nodes(srv_conf) != NGX_OK)
+        return NGX_HTTP_INTERNAL_SERVER_ERROR;
     
     if(ctx == NULL) {
         ctx = ngx_palloc(r->pool, sizeof(ngx_http_r4x_request_ctx));

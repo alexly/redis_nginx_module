@@ -80,10 +80,6 @@ typedef struct {
 typedef struct {
     ngx_http_r4x_redis_node_t           *master;
     ngx_array_t                         *slaves;
-    
-    ngx_str_t                           host;
-    ngx_int_t                           port;
-        
     ngx_str_t                           common_script;
     ngx_array_t                         *eval_scripts;
 } ngx_http_r4x_srv_conf_t;
@@ -101,6 +97,8 @@ ngx_int_t ngx_http_r4x_async_command(ngx_http_r4x_redis_node_t *node, redisCallb
 
 ngx_int_t ngx_http_r4x_async_command_argv(ngx_http_r4x_redis_node_t *node, redisCallbackFn *fn, 
         void *privdata, int argc, char **argv, const size_t *argvlen);
+
+ngx_int_t ngx_http_r4x_lazy_configure_redis_cluster_nodes(ngx_http_r4x_srv_conf_t *srv_conf);
 
 void ngx_http_r4x_send_redis_reply(ngx_http_request_t *r, redisAsyncContext *c, 
                             redisReply *reply);
@@ -121,5 +119,7 @@ char* ngx_http_r4x_create_cstr_by_ngxstr(ngx_pool_t *pool, ngx_str_t *source, si
 
 ngx_int_t ngx_http_r4x_copy_ngxstr(ngx_pool_t *pool, ngx_str_t *dest, 
         ngx_str_t *src, size_t offset, size_t len);
+
+char* ngx_http_r4x_read_conf_file(ngx_conf_t *cf, ngx_str_t *file_path, ngx_str_t *buff);
 
 #endif

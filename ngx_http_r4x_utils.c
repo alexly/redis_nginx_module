@@ -165,3 +165,56 @@ ngx_http_r4x_copy_ngxstr(ngx_pool_t *pool, ngx_str_t *dest, ngx_str_t *src, size
     
     return NGX_OK;
 }
+
+char* ngx_http_r4x_read_conf_file(ngx_conf_t *cf, ngx_str_t *file_path, ngx_str_t *buff)
+{
+    ngx_file_t                  file;
+    ngx_file_info_t             fi;
+    ngx_err_t                   err;
+    size_t                      size;
+    ssize_t                     n;
+    
+    ngx_memzero(&file, sizeof(ngx_file_t));
+    file.name = *file_path;
+    file.log = cf->log;
+    
+    file.fd = ngx_open_file(file_path->data, NGX_FILE_RDONLY, 0, 0);
+    if (file.fd == NGX_INVALID_FILE) {
+        err = ngx_errno;
+        if (err != NGX_ENOENT) {
+            ngx_conf_log_error(NGX_LOG_CRIT, cf, err,
+                               ngx_open_file_n " \"%s\" failed", file_path->data);
+        }
+        return NGX_CONF_ERROR;;
+    }
+    
+    if (ngx_fd_info(file.fd, &fi) == NGX_FILE_ERROR) {
+        ngx_conf_log_error(NGX_LOG_CRIT, cf, ngx_errno,
+                           ngx_fd_info_n " \"%s\" failed", file_path->data);
+        
+        return NGX_CONF_ERROR;
+    }
+    
+    size = (size_t) ngx_file_size(&fi);
+    
+    buff->data = ngx_palloc(cf->pool, size);
+    buff->len = size;
+    
+    n = ngx_read_file(&file, buff->data, size, 0);
+    
+    if (n == NGX_ERROR) {
+        ngx_conf_log_error(NGX_LOG_CRIT, cf, ngx_errno,
+                           ngx_read_file_n " \"%s\" failed", file_path->data);
+        return NGX_CONF_ERROR;
+    }
+
+    if ((size_t) n != size) {
+        ngx_conf_log_error(NGX_LOG_CRIT, cf, 0,
+            ngx_read_file_n " \"%s\" returned only %z bytes instead of %z",
+            file_path->data, n, size);
+        
+        return NGX_CONF_ERROR;
+    }
+    
+    return NGX_CONF_OK;
+}

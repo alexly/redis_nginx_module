@@ -22,7 +22,6 @@
 #include "ngx_http_r4x_module.h"
 
 static void* ngx_http_r4x_create_srv_conf(ngx_conf_t *cf);
-static char* ngx_http_r4x_merge_srv_conf(ngx_conf_t *cf, void *parent, void *child);
 static void* ngx_http_r4x_create_loc_conf(ngx_conf_t *cf);
 static char *ngx_http_r4x_exec_handler_init(ngx_conf_t *cf, ngx_command_t *cmd, void *conf);
 static char *ngx_http_r4x_exec_return_handler_init(ngx_conf_t *cf, ngx_command_t *cmd, void *conf);
@@ -31,26 +30,11 @@ static ngx_int_t ngx_http_r4x_init_module(ngx_cycle_t *cycle);
 static char* ngx_http_r4x_load_common_script(ngx_conf_t *cf, ngx_command_t *cmd, void *conf);
 char* ngx_http_r4x_set_redis_master_node(ngx_conf_t *cf, ngx_command_t *cmd, void *conf);
 char* ngx_http_r4x_add_redis_slave_node(ngx_conf_t *cf, ngx_command_t *cmd, void *conf);
-static ngx_int_t ngx_http_r4x_postconfiguration(ngx_conf_t *cf);
 
 ngx_int_t ngx_http_r4x_exec_handler(ngx_http_request_t *r);
 void ngx_http_r4x_process_redis_reply(redisAsyncContext *c, void *repl, void *privdata);
 
-static ngx_command_t  ngx_http_r4x_commands[] = {
-    {	ngx_string("redis_host"),
-        NGX_HTTP_SRV_CONF|NGX_HTTP_MAIN_CONF|NGX_CONF_TAKE1,
-        ngx_conf_set_str_slot,
-        NGX_HTTP_SRV_CONF_OFFSET,
-        offsetof(ngx_http_r4x_srv_conf_t, host),
-        NULL },
-
-    {	ngx_string("redis_port"),
-        NGX_HTTP_SRV_CONF|NGX_HTTP_MAIN_CONF|NGX_CONF_TAKE1,
-        ngx_conf_set_num_slot,
-        NGX_HTTP_SRV_CONF_OFFSET,
-        offsetof(ngx_http_r4x_srv_conf_t, port),
-        NULL },
-        
+static ngx_command_t  ngx_http_r4x_commands[] = {       
     {	ngx_string("redis_master_node"),
         NGX_HTTP_SRV_CONF|NGX_HTTP_MAIN_CONF|NGX_CONF_TAKE1,
         ngx_http_r4x_set_redis_master_node,
@@ -90,11 +74,11 @@ static ngx_command_t  ngx_http_r4x_commands[] = {
 
 static ngx_http_module_t  ngx_http_r4x_module_ctx = {
   NULL,                             /* preconfiguration */
-  ngx_http_r4x_postconfiguration,   /* postconfiguration */
+  NULL,                             /* postconfiguration */
   NULL,                             /* create main configuration */
   NULL,                             /* init main configuration */
   ngx_http_r4x_create_srv_conf,     /* create server configuration */
-  ngx_http_r4x_merge_srv_conf,      /* merge server configuration */
+  NULL,                             /* merge server configuration */
   ngx_http_r4x_create_loc_conf,     /* create location configuration */
   NULL                              /* merge location configuration char* redis4nginx_merge_loc_conf(ngx_conf_t *cf, void *parent, void *child);*/
 };
@@ -125,8 +109,6 @@ static void* ngx_http_r4x_create_srv_conf(ngx_conf_t *cf)
     ngx_http_r4x_srv_conf_t *srv_conf;
     
     srv_conf = ngx_pcalloc(cf->pool, sizeof(ngx_http_r4x_srv_conf_t));
-
-    srv_conf->port = NGX_CONF_UNSET;
     
     return srv_conf;
 }
@@ -134,11 +116,6 @@ static void* ngx_http_r4x_create_srv_conf(ngx_conf_t *cf)
 static char* ngx_http_r4x_load_common_script(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
 {
     ngx_http_r4x_srv_conf_t     *srv_conf;
-    ngx_file_t                  file;
-    ngx_file_info_t             fi;
-    ngx_err_t                   err;
-    size_t                      size;
-    ssize_t                     n;
     ngx_str_t                   file_name, *value;
     
     srv_conf = conf;
@@ -146,93 +123,7 @@ static char* ngx_http_r4x_load_common_script(ngx_conf_t *cf, ngx_command_t *cmd,
     value = cf->args->elts;
     file_name = value[1];
     
-    ngx_memzero(&file, sizeof(ngx_file_t));
-    file.name = file_name;
-    file.log = cf->log;
-    
-    file.fd = ngx_open_file(file_name.data, NGX_FILE_RDONLY, 0, 0);
-    if (file.fd == NGX_INVALID_FILE) {
-        err = ngx_errno;
-        if (err != NGX_ENOENT) {
-            ngx_conf_log_error(NGX_LOG_CRIT, cf, err,
-                               ngx_open_file_n " \"%s\" failed", file_name.data);
-        }
-        return NGX_CONF_ERROR;
-    }
-    
-    if (ngx_fd_info(file.fd, &fi) == NGX_FILE_ERROR) {
-        ngx_conf_log_error(NGX_LOG_CRIT, cf, ngx_errno,
-                           ngx_fd_info_n " \"%s\" failed", file_name.data);
-        
-        return NGX_CONF_ERROR;
-    }
-    
-    size = (size_t) ngx_file_size(&fi);
-    
-    srv_conf->common_script.data = ngx_palloc(cf->pool, size);
-    srv_conf->common_script.len = size;
-    
-    n = ngx_read_file(&file, srv_conf->common_script.data, size, 0);
-    
-    if (n == NGX_ERROR) {
-        ngx_conf_log_error(NGX_LOG_CRIT, cf, ngx_errno,
-                           ngx_read_file_n " \"%s\" failed", file_name.data);
-        return NGX_CONF_ERROR;
-    }
-
-    if ((size_t) n != size) {
-        ngx_conf_log_error(NGX_LOG_CRIT, cf, 0,
-            ngx_read_file_n " \"%s\" returned only %z bytes instead of %z",
-            file_name.data, n, size);
-        
-        return NGX_CONF_ERROR;
-    }
-    
-    return NGX_CONF_OK;
-    
-}
-static char* ngx_http_r4x_merge_srv_conf(ngx_conf_t *cf, void *parent, void *child)
-{
-	ngx_http_r4x_srv_conf_t     *prev = parent;
-	ngx_http_r4x_srv_conf_t     *conf = child;
-    
-    ngx_uint_t                  i;
-    ngx_http_r4x_redis_node_t   *slave;
-    ngx_http_r4x_srv_conf_t     *srv_conf;
-        
-    
-	ngx_log_debug0(NGX_LOG_INFO, cf->log, 0, "resis4nginx merge server config");
-
-	ngx_conf_merge_str_value(conf->host, prev->host, NULL);
-
-	ngx_conf_merge_value(conf->port, prev->port, NGX_CONF_UNSET);
-    
-    srv_conf = ngx_http_conf_get_module_srv_conf(cf, ngx_http_r4x_module);
-    
-    if(srv_conf->master == NULL) {
-        //TODO: logging "master node does't specified";
-        return NGX_CONF_ERROR;
-    }
-            
-    srv_conf->master->common_script = &srv_conf->common_script;
-    srv_conf->eval_scripts          = srv_conf->eval_scripts;
-    
-    if(srv_conf->slaves != NULL) {
-        
-        slave = srv_conf->slaves->elts;
-        for (i = 0; i <= srv_conf->slaves->nelts - 1; i++) {
-            slave[i].common_script  = &srv_conf->common_script;
-            slave[i].eval_scripts   = srv_conf->eval_scripts;
-        }
-    }
-    
-	return NGX_CONF_OK;
-}
-
-
-static ngx_int_t ngx_http_r4x_postconfiguration(ngx_conf_t *cf)
-{
-    return NGX_OK;
+    return ngx_http_r4x_read_conf_file(cf, &file_name, &srv_conf->common_script);
 }
 
 static void* ngx_http_r4x_create_loc_conf(ngx_conf_t *cf)

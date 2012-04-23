@@ -21,6 +21,30 @@
 #include "ddebug.h"
 #include "ngx_http_r4x_module.h"
 
+ngx_int_t ngx_http_r4x_lazy_configure_redis_cluster_nodes(ngx_http_r4x_srv_conf_t *srv_conf)
+{
+    ngx_uint_t                      i;
+    ngx_http_r4x_redis_node_t       *slave;
+    
+    if(srv_conf->master == NULL) {
+        //TODO: logging "master node does't specified";
+        return NGX_ERROR;
+    }
+            
+    srv_conf->master->common_script = &srv_conf->common_script;
+    srv_conf->master->eval_scripts          = srv_conf->eval_scripts;
+    
+    if(srv_conf->slaves != NULL) {
+        
+        slave = srv_conf->slaves->elts;
+        for (i = 0; i <= srv_conf->slaves->nelts - 1; i++) {
+            slave[i].common_script  = &srv_conf->common_script;
+            slave[i].eval_scripts   = srv_conf->eval_scripts;
+        }
+    }
+    
+    return NGX_OK;
+}
 
 static char*
 ngx_http_r4x_configure_redis_node(ngx_conf_t *cf, ngx_http_r4x_redis_node_t *node)

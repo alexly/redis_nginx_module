@@ -25,7 +25,7 @@ static ngx_int_t ngx_http_r4x_add_event(ngx_connection_t *c, ngx_int_t event);
 static ngx_int_t ngx_http_r4x_del_event(ngx_connection_t *c, ngx_int_t event);
 static ngx_int_t ngx_http_r4x_add_connection(int fd, ngx_connection_t **c);
 static void ngx_http_r4x_connecte_event_handler(const redisAsyncContext *ctx);
-static void ngx_http_r4x_disconnecte_event_handler(const redisAsyncContext *ctx, int status);
+static void ngx_http_r4x_disconnect_event_handler(const redisAsyncContext *ctx, int status);
 static void ngx_http_r4x_read_event_handler(ngx_event_t *handle);
 static void ngx_http_r4x_write_event_handler(ngx_event_t *handle);
 static void ngx_http_r4x_add_read(void *privdata);
@@ -58,7 +58,7 @@ ngx_int_t ngx_http_r4x_init_connection(ngx_http_r4x_redis_node_t *node)
             return NGX_ERROR;
 
         redisAsyncSetConnectCallback(node->context, ngx_http_r4x_connecte_event_handler);
-        redisAsyncSetDisconnectCallback(node->context, ngx_http_r4x_disconnecte_event_handler);
+        redisAsyncSetDisconnectCallback(node->context, ngx_http_r4x_disconnect_event_handler);
 
         if(ngx_http_r4x_add_connection(node->context->c.fd, &node->conn) != NGX_OK) {
             return NGX_ERROR;
@@ -83,7 +83,7 @@ ngx_int_t ngx_http_r4x_init_connection(ngx_http_r4x_redis_node_t *node)
             ngx_http_r4x_async_command(node, ngx_http_r4x_script_load_completed, NULL, "eval %b 0", 
                     node->common_script->data, node->common_script->len);
         
-        if(node->eval_scripts != NULL)  {
+        if(node->eval_scripts != NULL) {
             script = node->eval_scripts->elts;
             
             for(i=0; i < node->eval_scripts->nelts; i++)
@@ -123,7 +123,7 @@ static void ngx_http_r4x_connecte_event_handler(const redisAsyncContext *ctx)
     node->connected = 1;
 }
 
-static void ngx_http_r4x_disconnecte_event_handler(const redisAsyncContext *ctx, int status)
+static void ngx_http_r4x_disconnect_event_handler(const redisAsyncContext *ctx, int status)
 {
     ngx_http_r4x_redis_node_t *node  = ctx->data;
     node->connected = 0;
