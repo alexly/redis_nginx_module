@@ -55,13 +55,6 @@ static ngx_command_t  ngx_http_r4x_commands[] = {
         NGX_HTTP_SRV_CONF_OFFSET,
         0,
         NULL },
-
-    {   ngx_string("redis_read_cmd"),
-        NGX_HTTP_LOC_CONF|NGX_HTTP_LIF_CONF|NGX_CONF_ANY,
-        ngx_http_r4x_exec_handler_init,
-        NGX_HTTP_LOC_CONF_OFFSET,
-        0,
-        NULL },
         
     {   ngx_string("redis_read_cmd_ret"),
         NGX_HTTP_LOC_CONF|NGX_HTTP_LIF_CONF|NGX_CONF_ANY,
@@ -77,7 +70,7 @@ static ngx_command_t  ngx_http_r4x_commands[] = {
         0,
         NULL },
         
-    {   ngx_string("redis_write_cmd_ret"),
+    {   ngx_string("redis_write_cmd_return"),
         NGX_HTTP_LOC_CONF|NGX_HTTP_LIF_CONF|NGX_CONF_ANY,
         ngx_http_r4x_exec_return_handler_init,
         NGX_HTTP_LOC_CONF_OFFSET,

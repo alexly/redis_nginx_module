@@ -51,7 +51,7 @@ typedef struct {
 } ngx_http_r4x_parsed_json;
 
 typedef struct {
-    ngx_array_t                         arguments;    // metadata for redis arguments
+    ngx_array_t                         arguments;
     char                                **cmd_argvs;
     size_t                              *cmd_argv_lens;
     redisCallbackFn                     *process_reply;

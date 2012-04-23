@@ -73,8 +73,7 @@ ngx_http_r4x_compile_directive(ngx_conf_t *cf, ngx_http_r4x_loc_conf_t * loc_con
     
     value = cf->args->elts;
     
-    if(ngx_memcmp(value[0].data, "redis_read_cmd", value[0].len) == 0
-        ||ngx_memcmp(value[0].data, "redis_read_cmd", value[0].len) == 0) 
+    if(ngx_memcmp(value[0].data, "redis_read_cmd", value[0].len) == 0)
     {    
         directive->read_only = 1;
     }
