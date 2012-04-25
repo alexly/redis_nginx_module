@@ -54,9 +54,9 @@ typedef struct {
     ngx_array_t                         arguments;
     char                                **cmd_argvs;
     size_t                              *cmd_argv_lens;
-    redisCallbackFn                     *process_reply;
     unsigned                            require_json_field:1;
     unsigned                            read_only:1;
+    unsigned                            subscribed:1;
 } ngx_http_r4x_directive_t;
 
 typedef struct {

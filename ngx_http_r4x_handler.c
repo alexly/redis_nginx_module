@@ -36,7 +36,7 @@ ngx_http_r4x_process_redis_reply(redisAsyncContext *c, void *repl, void *privdat
     
     ctx = ngx_http_get_module_ctx(r, ngx_http_r4x_module);
     
-    if(rr == NULL) { 
+    if(rr == NULL) {
         // TODO: logging connection to redis db is lost
         ngx_http_finalize_request(r, NGX_HTTP_INTERNAL_SERVER_ERROR);
         return;
@@ -132,7 +132,7 @@ ngx_http_r4x_run_directives(ngx_http_request_t *r)
 
         HTTP_500_IF_NOT_NGX_OK(
             ngx_http_r4x_async_command_argv(node, 
-                directive->process_reply, r,  directive->arguments.nelts, 
+                ngx_http_r4x_process_redis_reply, r,  directive->arguments.nelts, 
                 directive->cmd_argvs, directive->cmd_argv_lens));
     }
 

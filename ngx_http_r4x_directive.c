@@ -73,8 +73,7 @@ ngx_http_r4x_compile_directive(ngx_conf_t *cf, ngx_http_r4x_loc_conf_t * loc_con
     
     value = cf->args->elts;
     
-    if(ngx_memcmp(value[0].data, "redis_read_cmd", value[0].len) == 0)
-    {    
+    if(ngx_memcmp(value[0].data, "redis_read_cmd", value[0].len) == 0) {    
         directive->read_only = 1;
     }
     else {
@@ -106,6 +105,13 @@ ngx_http_r4x_compile_directive(ngx_conf_t *cf, ngx_http_r4x_loc_conf_t * loc_con
         
         script = ngx_array_push(srv_conf->eval_scripts);
         ngx_http_r4x_copy_ngxstr(cf->pool, script, &value[2], 0, (&value[2])->len);
+    }
+    else {
+        if(ngx_strcmp(value[1].data, "subscribe") == 0 
+                || ngx_strcmp(value[1].data, "psubscribe") == 0) 
+        {
+            directive->subscribed = 1;
+        }
     }
     
     for (i = skip_args; i < cf->args->nelts; i++)
