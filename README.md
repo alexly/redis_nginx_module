@@ -14,7 +14,8 @@ You can on the side of the server Redis to do the following operations with LUA 
 Response will be sent to the client only after the completion of an "asynchronous" operation. 
 Redis Server processes requests in a single thread.
 Operation is fully atomistic and should not be performed more than 100-500 ms. 
-For maximum performance scripts and other operaion do not have to run for a long time and handle large volumes of data
+For maximum performance scripts. And other operaion don't have to run for a long time.
+
 
 Lua Script example:
 =============
