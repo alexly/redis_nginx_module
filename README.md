@@ -24,9 +24,9 @@ Lua Script example:
     
     -- any processing ...
     
-    local valu e= redis.call('get', 'testkey');
+    local value = redis.call('get', 'testkey');
     
-    json_value = { true, { foo = 'bar', val= value} }
+    json_value = { true, { foo = 'bar', val = value} }
     
     json_text = cjson.encode(value)
     
@@ -39,19 +39,19 @@ Lua Script example:
 How to build this nginx module:
 
 
-Tested on Ubuntu 11.04/12.04 LTS. 
-Download [http://nginx.org/ nginx]  source. Put it ro folder.
+    Tested on Ubuntu 11.04/12.04 LTS. 
+    Download [http://nginx.org/ nginx]  source. Put it ro folder.
+    
+    chechout redis4nginx https://github.com/donhuanmatus/redis4nginx.git to nginx/redis4nginx
 
-chechout redis4nginx https://github.com/donhuanmatus/redis4nginx.git to nginx/redis4nginx
+    make clean
+    ./configure --add-module=./redis4nginx
+    make
+    or 
+    sudo make and install
 
-make clean
-./configure --add-module=./redis4nginx
-make
-or 
-sudo make and install
-
-to run:
-./nginx
+    to run:
+    ./nginx
 
 
 Simple nginx config:
