@@ -29,6 +29,13 @@ return json_text;
 
 -- Returns: '[true,{"foo":"bar", "val": "testvalue"}]'
 
+How to build this nginx module:
+# Tested on Ubuntu 11.04/12.04 LTS
+# download nginx source. Put it ro folder.
+# chechout redis4nginx https://github.com/donhuanmatus/redis4nginx.git to nginx folder
+make clean
+./configure --add-module=./redis4nginx
+make
 
 Simple nginx config:
 =============
@@ -58,9 +65,9 @@ charset utf-8;
         }
 
         location /count {
-            // text/html are json or html 
+            # text/html are json or html 
             add_header Content-Type "text/html; charset=UTF-8";
-            // read from single master node
+            # read from single master node
             # returns students count
             redis_exec_return eval "return #(cjson.parse(redis.call('get "test'))) 0;
         }
