@@ -19,8 +19,6 @@ For maximum performance scripts and other operaion do not have to run for a long
 Lua Script example:
 =============
 
-
-    location test {
     
     redis.call("set", "testkey", "testvalue");
     
@@ -36,7 +34,6 @@ Lua Script example:
     
     -- Returns: '[true,{'foo':'bar', '"val': 'testvalue'}]'
     
-    }
 
 
 How to build this nginx module:
