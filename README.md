@@ -30,12 +30,22 @@ return json_text;
 -- Returns: '[true,{"foo":"bar", "val": "testvalue"}]'
 
 How to build this nginx module:
-# Tested on Ubuntu 11.04/12.04 LTS
-# download nginx source. Put it ro folder.
-# chechout redis4nginx https://github.com/donhuanmatus/redis4nginx.git to nginx folder
+=============
+
+Tested on Ubuntu 11.04/12.04 LTS. 
+Download [http://nginx.org/ nginx]  source. Put it ro folder.
+
+chechout redis4nginx https://github.com/donhuanmatus/redis4nginx.git to nginx/redis4nginx
+
 make clean
 ./configure --add-module=./redis4nginx
 make
+or 
+sudo make and install
+
+to run:
+./nginx
+
 
 Simple nginx config:
 =============
