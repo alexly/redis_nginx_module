@@ -1,4 +1,4 @@
-Description.
+Overview.
 =============
 
 This is an Nginx module that allows you to make requests to the Redis server in a non blocking mode. 
@@ -6,9 +6,15 @@ The module supports the Redis 2.x. It can operate with the protocols of TCP / Un
 
 This module returns parsed response from the Redis server. It's recommended to use Redis server side scripting(LUA). 
 Thus, we can obtain the desired response format on the Redis Server side.
+The module is intended for the issuance of outside lines json, xml, or error code. I like json. 
 
-Example:
 
+You can on the side of the server Redis to do the following operations with LUA scripts. 
+
+Operation is fully atomistic and should not be performed more than a second.
+
+Lua Script example:
+=============
 redis.call("set", "testkey", "testvalue");
 
 ...
@@ -24,16 +30,52 @@ return json_text;
 -- Returns: '[true,{"foo":"bar", "val": "testvalue"}]'
 
 
+Simple nginx config:
+=============
+
+http {
+charset utf-8;
+    include       mime.types;
+    default_type  application/octet-stream;
+
+    sendfile        on;
+
+    server {
+        listen       80;
+        server_name  localhost;
+
+        # previous idea to use the global(single) lua state enviroment.
+        # todo: associate lua script file with the name of a function
+        redis_common_script conf/common_script.lua;
+        redis_master_node 127.0.0.1:6379;
+
+        location /set {
+            add_header Content-Type "text/html; charset=UTF-8";
+            # write to single master node
+            # students: [ {StudentId:"", StudentName:""}, .. {..} ]
+            # send to redis. And store with the key. 
+            redis_read_cmd_ret set test @students;
+        }
+
+        location /count {
+            // text/html are json or html 
+            add_header Content-Type "text/html; charset=UTF-8";
+            // read from single master node
+            # returns students count
+            redis_exec_return eval "return #(cjson.parse(redis.call('get "test'))) 0;
+        }
+
+        location / {
+            root   html;
+            index  index.html index.htm;
+        }
+    }
+
+}
 
 Copyright & License
 =============
 
-This module is licenced under the ICE license.
+New BSD License
 
 Copyright (c) 2011-2012, Alexander Lyalin <alexandr.lyalin@gmail.com>
-
-Permission to use, copy, modify, and/or distribute this software for any
-purpose with or without fee is hereby granted, provided that the above
-copyright notice and this permission notice appear in all copies.
-
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
