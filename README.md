@@ -71,7 +71,7 @@ charset utf-8;
             # write to single master node
             # students: [ {StudentId:"", StudentName:""}, .. {..} ]
             # send to redis. And store with the key. 
-            redis_read_cmd_ret set test @students;
+            redis_read_cmd_ret eval "set test KEYS[1]" 1 @students;
         }
 
         location /count {
@@ -79,7 +79,13 @@ charset utf-8;
             add_header Content-Type "text/html; charset=UTF-8";
             # read from single master node
             # returns students count
-            redis_exec_return eval "return #(cjson.parse(redis.call('get "test'))) 0;
+            redis_read_cmd_ret eval "local test = redis.call('get 'test');
+                                    local parsed = cjson.parse(test);
+                                    if(#parsed) then
+                                        return #parsed;
+                                    end
+                                    
+                                    return 0;" 0;
         }
 
         location / {
