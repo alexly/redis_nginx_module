@@ -20,13 +20,21 @@ Lua Script example:
 =============
 
 location test {
+
 redis.call("set", "testkey", "testvalue");
+
 -- any processing ...
+
 local valu e= redis.call('get', 'testkey');
+
 json_value = { true, { foo = 'bar', val= value} }
+
 json_text = cjson.encode(value)
+
 return json_text;
+
 -- Returns: '[true,{'foo':'bar', '"val': 'testvalue'}]'
+
 }
 
 
