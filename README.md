@@ -19,23 +19,24 @@ For maximum performance scripts and other operaion do not have to run for a long
 Lua Script example:
 =============
 
-location test {
 
-redis.call("set", "testkey", "testvalue");
-
--- any processing ...
-
-local valu e= redis.call('get', 'testkey');
-
-json_value = { true, { foo = 'bar', val= value} }
-
-json_text = cjson.encode(value)
-
-return json_text;
-
--- Returns: '[true,{'foo':'bar', '"val': 'testvalue'}]'
-
-}
+    location test {
+    
+    redis.call("set", "testkey", "testvalue");
+    
+    -- any processing ...
+    
+    local valu e= redis.call('get', 'testkey');
+    
+    json_value = { true, { foo = 'bar', val= value} }
+    
+    json_text = cjson.encode(value)
+    
+    return json_text;
+    
+    -- Returns: '[true,{'foo':'bar', '"val': 'testvalue'}]'
+    
+    }
 
 
 How to build this nginx module:
