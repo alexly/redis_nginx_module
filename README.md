@@ -50,51 +50,53 @@ to run:
 Simple nginx config:
 =============
 
-http {
-charset utf-8;
-    include       mime.types;
-    default_type  application/octet-stream;
 
-    sendfile        on;
-
-    server {
-        listen       80;
-        server_name  localhost;
-
-        # previous idea to use the global(single) lua state enviroment.
-        # todo: associate lua script file with the name of a function
-        redis_common_script conf/common_script.lua;
-        redis_master_node 127.0.0.1:6379;
-
-        location /set {
-            add_header Content-Type "text/html; charset=UTF-8";
-            # write to single master node
-            # students: [ {StudentId:"", StudentName:""}, .. {..} ]
-            # send to redis. And store with the key. 
-            redis_read_cmd_ret eval "set test KEYS[1]" 1 @students;
+    http {
+            charset utf-8;
+        
+            include       mime.types;
+            default_type  application/octet-stream;
+        
+            sendfile        on;
+        
+            server {
+                listen       80;
+                server_name  localhost;
+        
+                # previous idea to use the global(single) lua state enviroment.
+                # todo: associate lua script file with the name of a function
+                redis_common_script conf/common_script.lua;
+                redis_master_node 127.0.0.1:6379;
+        
+                location /set {
+                    add_header Content-Type "text/html; charset=UTF-8";
+                    # write to single master node
+                    # students: [ {StudentId:"", StudentName:""}, .. {..} ]
+                    # send to redis. And store with the key. 
+                    redis_read_cmd_ret eval "set test KEYS[1]" 1 @students;
+                }
+        
+                location /count {
+                    # text/html are json or html 
+                    add_header Content-Type "text/html; charset=UTF-8";
+                    # read from single master node
+                    # returns students count
+                    redis_read_cmd_ret eval "local test = redis.call('get 'test');
+                                            local parsed = cjson.parse(test);
+                                            if(#parsed) then
+                                                return #parsed;
+                                            end
+                                            
+                                            return 0;" 0;
+                }
+        
+                location / {
+                    root   html;
+                    index  index.html index.htm;
+                }
+            }
+        
         }
-
-        location /count {
-            # text/html are json or html 
-            add_header Content-Type "text/html; charset=UTF-8";
-            # read from single master node
-            # returns students count
-            redis_read_cmd_ret eval "local test = redis.call('get 'test');
-                                    local parsed = cjson.parse(test);
-                                    if(#parsed) then
-                                        return #parsed;
-                                    end
-                                    
-                                    return 0;" 0;
-        }
-
-        location / {
-            root   html;
-            index  index.html index.htm;
-        }
-    }
-
-}
 
 Copyright & License
 =============
