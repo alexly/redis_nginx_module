@@ -109,6 +109,6 @@ Simple nginx config:
 Copyright & License
 =============
 
-New BSD License
+New BSD License http://dist.codehaus.org/janino/new_bsd_license.txt
 
 Copyright (c) 2011-2012, Alexander Lyalin <alexandr.lyalin@gmail.com>
