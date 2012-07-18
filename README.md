@@ -4,7 +4,7 @@ Overview.
 This is an Nginx module that allows you to make requests to the Redis server in a non blocking mode. 
 The module supports the Redis 2.x. It can operate with the protocols of TCP / Unix Domain Sockets, also supports pipelining.
 
-This module returns parsed response from the Redis server. It's recommended to use Redis server side scripting(LUA). 
+This module returns parsed response from the Redis server. It's recommended to use Redis server side LUA scripting. 
 Thus, we can obtain the desired response format on the Redis Server side.
 
 Module uses to parse json this library js0n https://github.com/donhuanmatus/js0n/blob/master/README . 
@@ -12,8 +12,8 @@ It's one-pass json parser. Super low overhead to parsing json.
 
 Response will be sent to the client only after the completion of an "asynchronous" operation. 
 Redis Server processes requests in a single thread.
-Operation is fully atomistic and should not be performed more than 100-500 ms. 
-For maximum performance scripts. And other operaion don't have to run for a long time.
+Operation is fully atomic and should not be performed more than 300 ms. 
+For maximum performance scripts. And other operaion don't have to run for a long time Lua Scripts.
 
 
 Lua Script example:
