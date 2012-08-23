@@ -32,7 +32,7 @@ ngx_http_r4x_add_directive_argument(ngx_conf_t *cf, ngx_http_r4x_directive_t *di
     
     switch(raw_arg->data[0])
     {
-        case '$': // nginx variable            
+        case '$': // nginx variable
             directive_arg->type = REDIS4NGINX_COMPILIED_ARG;
             directive_arg->compilied = ngx_palloc(cf->pool, 
                     sizeof(ngx_http_complex_value_t));
@@ -47,14 +47,17 @@ ngx_http_r4x_add_directive_argument(ngx_conf_t *cf, ngx_http_r4x_directive_t *di
                 return NGX_CONF_ERROR;
             break;
             
-        case '@': // json field(from request body)
+        case '@':       // json field(from request body), 
+                        // example:  { students: [ {StudentId:"", StudentName:""}, .. {..} ] }
+                        // redis_read_cmd_ret eval "set test KEYS[1]" 1 @students; 
+                        // set massive of the students to the redis with key "test"
             directive_arg->type = REDIS4NGINX_JSON_FIELD_NAME_ARG;
             directive->require_json_field       = 1;
             loc_conf->require_json_field        = 1;
             ngx_http_r4x_copy_ngxstr(cf->pool, &directive_arg->value,  raw_arg, 1, raw_arg->len - 1);
             break;
 
-        default:
+        default: // string constant
             directive_arg->type = REDIS4NGINX_STRING_ARG;
             ngx_http_r4x_copy_ngxstr(cf->pool, &directive_arg->value, raw_arg, 0, raw_arg->len);
             break;
@@ -110,6 +113,7 @@ ngx_http_r4x_compile_directive(ngx_conf_t *cf, ngx_http_r4x_loc_conf_t * loc_con
         if(ngx_strcmp(value[1].data, "subscribe") == 0 
                 || ngx_strcmp(value[1].data, "psubscribe") == 0) 
         {
+            //todo: upgrate to use websockets
             directive->subscribed = 1;
         }
     }
