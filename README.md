@@ -7,7 +7,7 @@ The module supports the Redis 2.x. It can operate with the protocols of TCP / Un
 This module returns parsed response from the Redis server. It's recommended to use Redis server side LUA scripting. 
 Thus, we can obtain the desired response format on the Redis Server side.
 
-Module uses to parse json this library js0n https://github.com/donhuanmatus/js0n/blob/master/README . 
+Module uses to parse json library  https://github.com/donhuanmatus/js0n/blob/master/README . 
 It's one-pass json parser. Super low overhead to parsing json.
 
 Response will be sent to the client only after the completion of an "asynchronous" operation. 
