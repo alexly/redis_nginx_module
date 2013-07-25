@@ -82,6 +82,10 @@ Simple nginx config:
                     # students: [ {StudentId:"", StudentName:""}, .. {..} ]
                     # send to redis. And store with the key. 
                     redis_read_cmd_ret eval "set test KEYS[1]" 1 @students;
+                    # massive of the students to the redis with key "test"
+                    #'$' nginx variable
+                    #'@' json field(from request body
+                    # default string constant
                 }
         
                 location /count {
