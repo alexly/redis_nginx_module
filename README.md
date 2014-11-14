@@ -58,57 +58,74 @@ How to build this nginx module:
 Simple nginx config:
 =============
 
+worker_processes  1;
 
-    http {
-            charset utf-8;
-        
-            include       mime.types;
-            default_type  application/octet-stream;
-        
-            sendfile        on;
-        
-            server {
-                listen       80;
-                server_name  localhost;
-        
-                # previous idea to use the global(single) lua state enviroment.
-                # todo: associate lua script file with the name of a function
-                redis_common_script conf/common_script.lua;
-                redis_master_node 127.0.0.1:6379;
-        
-                location /set {
-                    add_header Content-Type "text/html; charset=UTF-8";
-                    # write to single master node
-                    # students: [ {StudentId:"", StudentName:""}, .. {..} ]
-                    # send to redis. And store with the key. 
-                    redis_read_cmd_ret eval "set test KEYS[1]" 1 @students;
-                    # massive of the students to the redis with key "test"
-                    #'$' nginx variable
-                    #'@' json field(from request body
-                    # default string constant
-                }
-        
-                location /count {
-                    # text/html are json or html 
-                    add_header Content-Type "text/html; charset=UTF-8";
-                    # read from single master node
-                    # returns students count
-                    redis_read_cmd_ret eval "local test = redis.call('get 'test');
-                                            local parsed = cjson.parse(test);
-                                            if(#parsed) then
-                                                return #parsed;
-                                            end
-                                            
-                                            return 0;" 0;
-                }
-        
-                location / {
-                    root   html;
-                    index  index.html index.htm;
-                }
-            }
-        
+daemon off;
+master_process off;
+
+events {
+    worker_connections 1024;
+}
+
+http {
+    server {
+        listen        localhost;
+
+        redis_master_node 127.0.0.1:6379;
+
+        location /setbylua {
+            add_header Content-Type "text/html; charset=UTF-8";
+            redis_read_cmd_ret eval "redis.call('set', KEYS[1], KEYS[2]); return 'Success';" 2 $arg_key $arg_value;
         }
+
+        location /getbylua {
+            add_header Content-Type "text/html; charset=UTF-8";
+            redis_read_cmd_ret eval "return redis.call('get',  KEYS[1])" 1 $arg_key;
+        }
+
+        location /get {
+            add_header Content-Type "text/html; charset=UTF-8";
+            redis_read_cmd_ret get $arg_key;
+        }
+
+        location /set {
+            add_header Content-Type "text/html; charset=UTF-8";
+            redis_write_cmd_ret set $arg_key $arg_value;
+        }
+
+        location /setstudents {
+            add_header Content-Type "text/html; charset=UTF-8";
+            # write to single master node
+            # request body: "students: [ {StudentId:'', StudentName:''}]"
+            # send to redis. And store with the key. 
+            redis_write_cmd_ret eval "redis.call('set', 'students', KEYS[1]);" 1 @students;
+            # massive of the students to the redis with key "students"
+            #module supports the following compiled variables:
+            #'$' nginx variable
+            #'@' json field(from request body
+            # default string constant
+        }
+
+        location /studentscount {
+            # text/html are json or html 
+            add_header Content-Type "text/html; charset=UTF-8";
+            # read from single master node
+            # returns students count
+            redis_read_cmd_ret eval "local test = redis.call('get 'students');
+                                    local parsed = cjson.parse(test);
+                                    if(#parsed) then
+                                        return #parsed;
+                                    end
+                                    
+                                    return 0;" 0;
+        }
+                
+        location / {
+            root html;
+            index index.html index.htm;
+        }
+    }
+}
 
 Copyright & License
 =============
