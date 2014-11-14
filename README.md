@@ -64,11 +64,15 @@ daemon off;
 master_process off;
 
 events {
+
     worker_connections 2048;
+    
 }
 
 http {
+
     server {
+    
         listen        localhost;
 
         redis_master_node 127.0.0.1:6379;
