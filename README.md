@@ -64,9 +64,7 @@ daemon off;
 master_process off;
 
 events {
-
     worker_connections 2048;
-    
 }
 
 http {
