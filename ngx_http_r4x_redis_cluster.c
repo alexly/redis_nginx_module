@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2012, Alexander Lyalin <alexandr.lyalin@gmail.com>
+ * Copyright (c) 2011-2015, Alexander Lyalin <alexandr.lyalin@gmail.com>
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -80,7 +80,7 @@ ngx_int_t ngx_http_r4x_get_read_only_node(ngx_http_request_t *r, ngx_http_r4x_re
     if(ngx_http_r4x_lazy_configure_redis_cluster_nodes(srv_conf) != NGX_OK)
         return NGX_HTTP_INTERNAL_SERVER_ERROR;
     
-    if(srv_conf->slaves->nelts == 0) {
+    if(!srv_conf->slaves || srv_conf->slaves->nelts == 0) {
         *node = srv_conf->master;
     }
     else {
