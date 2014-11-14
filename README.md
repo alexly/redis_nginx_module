@@ -77,7 +77,7 @@ http {
 
         location /setbylua {
             add_header Content-Type "text/html; charset=UTF-8";
-            redis_read_cmd_ret eval "redis.call('set', KEYS[1], KEYS[2]); return 'Success';" 2 $arg_key $arg_value;
+            redis_read_cmd_ret eval "redis.call('set', KEYS[1], KEYS[2]); return 'OK';" 2 $arg_key $arg_value;
         }
 
         location /getbylua {
