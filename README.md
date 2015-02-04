@@ -1,3 +1,8 @@
+Warning
+=============
+
+This project is not currently ready for production. Because large POST requests containing a json document will lead to the suspension of the execution of other requests.
+
 Overview.
 =============
 
