@@ -48,7 +48,7 @@ How to build this nginx module:
     Tested on Ubuntu 11.04/12.04 LTS. 
     Download [http://nginx.org/ nginx]  source. Put it ro folder.
     
-    chechout redis4nginx https://github.com/donhuanmatus/redis4nginx.git to nginx/redis4nginx
+    chechout redis4nginx https://github.com/alexly/redis4nginx.git to nginx/redis4nginx
 
     make clean
     ./configure --add-module=./redis4nginx
